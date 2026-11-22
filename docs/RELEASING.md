@@ -24,5 +24,14 @@ Do not install it into the same environment as the other `mapwright` package (pi
    `CHANGELOG.md` "Unreleased" notes under the new version, commit, push.
 2. Rehearse (optional): *Actions → release → Run workflow → testpypi*, then
    `pipx install --index-url https://test.pypi.org/simple/ mapwright-agent`.
-3. Publish: `git tag v0.1.0 && git push origin v0.1.0`. The workflow checks the tag matches the version, runs the
-   tests, builds, publishes to PyPI and creates a GitHub release with the files attached.
+3. Publish: `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow checks the tag matches the version, runs the
+   tests, builds, creates a GitHub release with the wheel and sdist attached, and publishes to PyPI once the
+   repository variable `PUBLISH_PYPI` is `true` (*Settings → Secrets and variables → Actions → Variables*; set it after the trusted publisher exists).
+
+## Install without PyPI
+
+```bash
+pipx install git+https://github.com/1mystic/Mapwright.git            # latest main
+pipx install git+https://github.com/1mystic/Mapwright.git@v0.2.0     # a release
+pipx install https://github.com/1mystic/Mapwright/releases/download/v0.2.0/mapwright_agent-0.2.0-py3-none-any.whl
+```

@@ -27,6 +27,7 @@ is; everything else is computed, and everything it claims is checked.
 
 ```bash
 pipx install mapwright-agent          # zero dependencies, Python 3.10+ (command: mapwright)
+# or straight from GitHub: pipx install git+https://github.com/1mystic/Mapwright.git
 cd your-project
 mapwright init --connect claude-code  # baseline + MCP server + hooks for this project
 mapwright open                        # the map in your browser

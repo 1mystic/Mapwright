@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - PyPI release pipeline (trusted publishing, tag-driven, TestPyPI rehearsal) under the name `mapwright-agent`; version is single-sourced in `src/mapwright/__init__.py`; timeline markers centred on their line.
 
