@@ -22,8 +22,57 @@ DEFAULTS = {
 }
 
 
+_START: str | None = None          # where project-local discovery starts (default: the current directory)
+_CACHE: dict[tuple, Path] = {}
+MARKER_DIR = ".mapwright"
+MARKER = "home.json"
+
+
+def set_start(path: str | os.PathLike | None) -> None:
+    """Start project-local home discovery from this directory (a --path / --root / hook cwd) instead of the cwd."""
+    global _START
+    _START = os.path.abspath(os.fspath(path)) if path else None
+
+
+def reset_cache() -> None:
+    _CACHE.clear()
+
+
+def local_home(start: str | os.PathLike | None = None) -> Path | None:
+    """The project-local home found by walking up from start (default cwd) for .mapwright/home.json, or None."""
+    try:
+        cur = Path(os.path.abspath(os.fspath(start) if start else (_START or os.getcwd())))
+    except OSError:
+        return None
+    user_home = Path.home()
+    for d in [cur, *cur.parents]:
+        if d == user_home:
+            break  # ~/.mapwright is the default home, not a project marker
+        marker = d / MARKER_DIR / MARKER
+        if marker.is_file():
+            data = read_json(marker, {})
+            h = data.get("home") if isinstance(data, dict) else None
+            if isinstance(h, str) and os.path.isabs(h):
+                return Path(h)
+            return None
+    return None
+
+
+def write_marker(root: str, home_dir: str) -> Path:
+    """Record home_dir as the home for the project at root (<root>/.mapwright/home.json)."""
+    m = Path(root) / MARKER_DIR / MARKER
+    write_json(m, {"home": home_dir})
+    reset_cache()
+    return m
+
+
 def home() -> Path:
-    p = Path(os.environ.get("MAPWRIGHT_HOME", Path.home() / ".mapwright"))
+    env = os.environ.get("MAPWRIGHT_HOME")
+    key = (env, _START or os.getcwd())
+    p = _CACHE.get(key)
+    if p is None:
+        p = Path(env) if env else (local_home() or Path.home() / ".mapwright")
+        _CACHE[key] = p
     p.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         if p.stat().st_mode & 0o077:

@@ -241,7 +241,7 @@ class Daemon:
                 parts = [unquote(x) for x in u.path.strip("/").split("/")]
                 try:
                     if u.path == "/v1/ping":
-                        return self._send(200, {"ok": True, "version": __version__, "uptime": time.time() - d.started})
+                        return self._send(200, {"ok": True, "version": __version__, "uptime": time.time() - d.started, "home": str(config.home())})
                     if u.path == "/v1/projects":
                         rows = []
                         for key, entry in config.projects().items():
