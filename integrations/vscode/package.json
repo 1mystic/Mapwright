@@ -1,0 +1,103 @@
+{
+  "name": "mapwright-vscode",
+  "displayName": "Mapwright",
+  "description": "A live map of what your coding agent is building: architecture, files, classes, data, cloud, logic and every step, beside your code.",
+  "version": "0.1.0",
+  "publisher": "mapwright",
+  "license": "MIT",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "architecture",
+    "diagram",
+    "mcp",
+    "agent",
+    "claude",
+    "copilot",
+    "cursor"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mapwright.open",
+        "title": "Open Map",
+        "category": "Mapwright",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "mapwright.openExternal",
+        "title": "Open Map in Browser",
+        "category": "Mapwright"
+      },
+      {
+        "command": "mapwright.init",
+        "title": "Track This Workspace",
+        "category": "Mapwright"
+      },
+      {
+        "command": "mapwright.step",
+        "title": "Record Step",
+        "category": "Mapwright"
+      },
+      {
+        "command": "mapwright.brief",
+        "title": "Copy Agent Brief",
+        "category": "Mapwright"
+      },
+      {
+        "command": "mapwright.connect",
+        "title": "Connect an Agent",
+        "category": "Mapwright"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mapwright.open",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Mapwright",
+      "properties": {
+        "mapwright.command": {
+          "type": "string",
+          "default": "mapwright",
+          "description": "How to run Mapwright, e.g. `mapwright` or `python3 -m mapwright`."
+        },
+        "mapwright.openIn": {
+          "type": "string",
+          "enum": [
+            "panel",
+            "browser"
+          ],
+          "default": "panel",
+          "description": "Open the map in an editor panel or in your browser."
+        },
+        "mapwright.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the current step and open todos in the status bar."
+        }
+      }
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "mapwright",
+        "label": "Mapwright"
+      }
+    ]
+  }
+}

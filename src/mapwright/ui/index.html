@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapwright</title>
+<link rel="icon" href="mark.svg">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="ide" id="ide">
+  <header class="toolbar">
+    <img class="logo" src="mark.svg" alt="Mapwright">
+    <button class="widget" id="w-project" title="Switch project"><span id="w-project-name">No project</span><svg class="i"><use href="icons.svg#chevron-down"/></svg></button>
+    <button class="widget live" id="w-step" title="Which point in the agent's work to look at"><svg class="i"><use href="icons.svg#history"/></svg><span class="badge" id="w-step-badge">LIVE</span><span class="sub" id="w-step-name">latest</span><svg class="i"><use href="icons.svg#chevron-down"/></svg></button>
+    <div class="searchbox" id="w-search" role="button" tabindex="0" title="Search files, symbols, views and actions"><svg class="i"><use href="icons.svg#search"/></svg><span>Search everywhere</span><kbd>⇧⇧</kbd></div>
+    <button class="agent-pill" id="w-agents" title="Connected agents"><span class="ldot" id="w-agents-dot"></span><span id="w-agents-txt">agents</span></button>
+    <button class="tbtn" id="w-step-add" title="Record a step now"><svg class="i"><use href="icons.svg#flag"/></svg></button>
+    <button class="tbtn" id="w-theme" title="Light or dark theme"><svg class="i"><use href="icons.svg#moon"/></svg></button>
+    <button class="tbtn" id="w-settings" title="Settings (Ctrl+,)"><svg class="i"><use href="icons.svg#gear"/></svg></button>
+  </header>
+
+  <nav class="stripe l" id="stripe-l" aria-label="Tool windows"></nav>
+  <aside class="left" id="left"><div class="resize" data-r="lw"></div><div class="phead"><span class="t" id="left-title">Project</span><span id="left-tools"></span></div><div class="pbody" id="left-body"></div></aside>
+  <main class="main" id="main"><div class="tabs" id="tabs" role="tablist"></div><div class="view" id="view"></div></main>
+  <aside class="right" id="right"><div class="resize" data-r="rw"></div><div class="phead"><span class="t" id="right-title">Inspector</span><button class="tbtn" id="right-close" title="Hide"><svg class="i"><use href="icons.svg#close"/></svg></button></div><div class="pbody" id="right-body"></div></aside>
+  <nav class="stripe r" id="stripe-r" aria-label="Side tools"></nav>
+  <section class="bottom" id="bottom"><div class="resize" data-r="bh"></div><div class="btabs" id="btabs"></div><div class="blist" id="bbody"></div></section>
+  <footer class="status" id="status"></footer>
+</div>
+<div class="toasts" id="toasts"></div>
+<script src="vendor/mermaid.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

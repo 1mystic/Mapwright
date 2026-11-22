@@ -1,0 +1,8 @@
+{
+  "name": "mapwright",
+  "version": "0.1.0",
+  "description": "A live map of what Claude is building: structure, architecture, data, cloud, logic and every step, read by Claude instead of exploring files.",
+  "author": { "name": "Mapwright" },
+  "license": "MIT",
+  "keywords": ["map", "architecture", "diagrams", "mcp", "tracking"]
+}

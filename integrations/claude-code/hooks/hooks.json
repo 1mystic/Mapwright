@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "mapwright hook claude-code", "timeout": 10 }] }],
+    "PostToolUse": [{ "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash", "hooks": [{ "type": "command", "command": "mapwright hook claude-code", "timeout": 10 }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "mapwright hook claude-code", "timeout": 20 }] }]
+  }
+}

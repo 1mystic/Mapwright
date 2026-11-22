@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "mapwright": { "command": "mapwright", "args": ["mcp"] }
+  }
+}

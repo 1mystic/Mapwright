@@ -1,0 +1,7 @@
+{
+  "name": "mapwright",
+  "owner": { "name": "Mapwright" },
+  "plugins": [
+    { "name": "mapwright", "source": "./integrations/claude-code", "description": "A live map of what Claude is building, read by Claude instead of exploring files." }
+  ]
+}
