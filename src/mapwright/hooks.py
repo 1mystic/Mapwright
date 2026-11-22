@@ -33,6 +33,8 @@ def handle(agent: str, payload: dict) -> None:
     home = os.path.realpath(os.path.expanduser("~"))
     if os.path.realpath(cwd) in (home, "/"):
         return  # never track a whole home directory
+    from . import config
+    config.set_start(cwd)  # a project-local home is found from the payload cwd (MAPWRIGHT_HOME still wins)
     p = open_project(cwd)
     ev = payload.get("hook_event_name") or payload.get("event") or ""
     if ev in ("UserPromptSubmit", "prompt"):

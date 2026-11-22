@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import sys
 import time
@@ -31,6 +32,15 @@ def server_command() -> tuple[str, list[str]]:
 def hook_command(agent: str) -> str:
     exe = shutil.which("mapwright")
     return f"mapwright hook {agent}" if exe else f'"{sys.executable}" -m mapwright hook {agent}'
+
+
+def hook_command_with_home(agent: str, home: str | None = None) -> str:
+    cmd = hook_command(agent)
+    if not home:
+        return cmd
+    if sys.platform.startswith("win"):  # best effort: cmd.exe form
+        return f'cmd /d /c "set MAPWRIGHT_HOME={home}&& {cmd}"'
+    return f"MAPWRIGHT_HOME={shlex.quote(home)} {cmd}"
 
 
 def _vscode_user_dir() -> Path:
@@ -74,17 +84,40 @@ MANUAL = {
 }
 
 
-def snippet(target: str = "any", root: str | None = None) -> str:
+def snippet(target: str = "any", root: str | None = None, home: str | None = None) -> str:
     cmd, args = server_command()
+    env = {"MAPWRIGHT_HOME": str(home)} if home else None
     if target == "vscode":
-        return json.dumps({"servers": {NAME: {"type": "stdio", "command": cmd, "args": args}}}, indent=2)
+        return json.dumps({"servers": {NAME: _entry("vscode", cmd, args, env)}}, indent=2)
     if target == "opencode":
-        return json.dumps({"mcp": {NAME: {"type": "local", "command": [cmd, *args], "enabled": True}}}, indent=2)
+        return json.dumps({"mcp": {NAME: _entry("opencode", cmd, args, env)}}, indent=2)
     if target == "codex":
-        return f'[mcp_servers.{NAME}]\ncommand = "{cmd}"\nargs = {json.dumps(args)}\n'
+        text = f'[mcp_servers.{NAME}]\ncommand = "{cmd}"\nargs = {json.dumps(args)}\n'
+        if env:
+            text += f"\n[mcp_servers.{NAME}.env]\nMAPWRIGHT_HOME = {json.dumps(env['MAPWRIGHT_HOME'])}\n"
+        return text
     if target == "zed":
-        return json.dumps({"context_servers": {NAME: {"command": {"path": cmd, "args": args}}}}, indent=2)
-    return json.dumps({"mcpServers": {NAME: {"command": cmd, "args": args}}}, indent=2)
+        c = {"path": cmd, "args": args}
+        if env:
+            c["env"] = env
+        return json.dumps({"context_servers": {NAME: {"command": c}}}, indent=2)
+    return json.dumps({"mcpServers": {NAME: _entry("mcpServers", cmd, args, env)}}, indent=2)
+
+
+def _entry(fmt: str, cmd: str, args: list[str], env: dict | None) -> dict:
+    if fmt == "vscode":
+        e = {"type": "stdio", "command": cmd, "args": args}
+        if env:
+            e["env"] = env
+    elif fmt == "opencode":
+        e = {"type": "local", "command": [cmd, *args], "enabled": True}
+        if env:
+            e["environment"] = env
+    else:
+        e = {"command": cmd, "args": args}
+        if env:
+            e["env"] = env
+    return e
 
 
 def _backup(path: Path) -> None:
@@ -114,7 +147,7 @@ def _save(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-_TOML_BLOCK = re.compile(r"(?ms)^\[mcp_servers\.mapwright\]\n.*?(?=^\[|\Z)")
+_TOML_BLOCK = re.compile(r"(?ms)^\[mcp_servers\.mapwright\]\n.*?(?=^\[(?!mcp_servers\.mapwright\.)|\Z)")
 
 
 def _hooks_path(scope: str, root: str) -> Path:
@@ -135,7 +168,7 @@ def _remove_file(path: Path) -> None:
             pass
 
 
-def _claude_hooks(path: Path, on: bool) -> None:
+def _claude_hooks(path: Path, on: bool, home: str | None = None) -> None:
     data = _load(path)
     hooks = data.get("hooks") or {}
     for ev in list(hooks):
@@ -143,7 +176,7 @@ def _claude_hooks(path: Path, on: bool) -> None:
         if not hooks[ev]:
             del hooks[ev]
     if on:
-        cmd = hook_command("claude-code")
+        cmd = hook_command_with_home("claude-code", home)
         entry = lambda matcher=None: {**({"matcher": matcher} if matcher else {}), "hooks": [{"type": "command", "command": cmd, "timeout": 10}]}  # noqa: E731
         hooks.setdefault("UserPromptSubmit", []).append(entry())
         hooks.setdefault("PostToolUse", []).append(entry("Write|Edit|MultiEdit|NotebookEdit|Bash"))
@@ -158,8 +191,9 @@ def _claude_hooks(path: Path, on: bool) -> None:
         _save(path, data)
 
 
-def install(target: str, scope: str = "project", root: str | None = None) -> list[str]:
-    """Returns the files written."""
+def install(target: str, scope: str = "project", root: str | None = None, home: str | None = None) -> list[str]:
+    """Returns the files written. With home, the MCP server and the Claude Code hooks run with MAPWRIGHT_HOME=home."""
+    home = os.path.abspath(str(home)) if home else None
     root = root or os.getcwd()
     spec = TARGETS.get(target)
     if not spec:
@@ -168,12 +202,13 @@ def install(target: str, scope: str = "project", root: str | None = None) -> lis
         raise ValueError(f"{spec['title']} supports scope: {', '.join(spec['scopes'])}")
     path = spec["scopes"][scope](root)
     cmd, args = server_command()
+    env = {"MAPWRIGHT_HOME": home} if home else None
     written = [str(path)]
-    if target == "claude-code" and scope == "user" and _claude_cli_add(cmd, args):
+    if target == "claude-code" and scope == "user" and _claude_cli_add(cmd, args, home):
         pass  # `claude mcp add -s user` wrote it
     elif spec["format"] == "toml":
         text = path.read_text() if path.exists() else ""
-        block = snippet("codex")
+        block = snippet("codex", home=home)
         text = _TOML_BLOCK.sub(block, text) if _TOML_BLOCK.search(text) else (text.rstrip() + "\n\n" if text.strip() else "") + block
         path.parent.mkdir(parents=True, exist_ok=True)
         _backup(path)
@@ -181,31 +216,31 @@ def install(target: str, scope: str = "project", root: str | None = None) -> lis
     else:
         data = _load(path)
         if spec["format"] == "servers":
-            data.setdefault("servers", {})[NAME] = {"type": "stdio", "command": cmd, "args": args}
+            data.setdefault("servers", {})[NAME] = _entry("vscode", cmd, args, env)
         elif spec["format"] == "opencode":
             data.setdefault("$schema", "https://opencode.ai/config.json")
-            data.setdefault("mcp", {})[NAME] = {"type": "local", "command": [cmd, *args], "enabled": True}
+            data.setdefault("mcp", {})[NAME] = _entry("opencode", cmd, args, env)
         else:
-            entry = {"command": cmd, "args": args}
+            entry = _entry("mcpServers", cmd, args, env)
             if target == "claude-code" and scope == "project":
                 entry = {"type": "stdio", **entry}
             data.setdefault("mcpServers", {})[NAME] = entry
         _save(path, data)
     if target == "claude-code":
         hp = _hooks_path(scope, root)
-        _claude_hooks(hp, True)
+        _claude_hooks(hp, True, home)
         written.append(str(hp))
     return written
 
 
-def _claude_cli_add(cmd: str, args: list[str]) -> bool:
+def _claude_cli_add(cmd: str, args: list[str], home: str | None = None) -> bool:
     """User scope for Claude Code: let its own CLI edit ~/.claude.json when it is installed."""
     import subprocess
     exe = shutil.which("claude")
     if not exe or os.environ.get("MAPWRIGHT_CLAUDE_JSON"):
         return False
     subprocess.run([exe, "mcp", "remove", "-s", "user", NAME], capture_output=True, timeout=30)
-    r = subprocess.run([exe, "mcp", "add", "-s", "user", NAME, "--", cmd, *args], capture_output=True, timeout=30)
+    r = subprocess.run([exe, "mcp", "add", "-s", "user", *(["-e", f"MAPWRIGHT_HOME={home}"] if home else []), NAME, "--", cmd, *args], capture_output=True, timeout=30)
     return r.returncode == 0
 
 
