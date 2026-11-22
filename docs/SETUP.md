@@ -17,7 +17,8 @@ machine; only the website (and, optionally, the packages) need hosting, and all 
 Requirements: Python 3.10 or newer. Nothing else: Mapwright has no runtime dependencies.
 
 ```bash
-pipx install ./mapwright-0.1.0          # from the unzipped folder
+pipx install mapwright-agent            # from PyPI (the command is `mapwright`)
+pipx install ./mapwright-0.1.0          # or from the unzipped folder
 ```
 
 or, without pipx:
@@ -26,7 +27,7 @@ or, without pipx:
 pip install ./mapwright-0.1.0
 ```
 
-Once it is published to PyPI (see section 4) this becomes `pipx install mapwright`.
+See [RELEASING.md](RELEASING.md) for publishing. The PyPI name `mapwright` is taken by another project, hence `mapwright-agent`.
 
 Check it works:
 

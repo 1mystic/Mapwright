@@ -26,7 +26,7 @@ is; everything else is computed, and everything it claims is checked.
 ## Quickstart
 
 ```bash
-pipx install ./mapwright-0.1.0        # from this folder (zero dependencies, Python 3.10+)
+pipx install mapwright-agent          # zero dependencies, Python 3.10+ (command: mapwright)
 cd your-project
 mapwright init --connect claude-code  # baseline + MCP server + hooks for this project
 mapwright open                        # the map in your browser

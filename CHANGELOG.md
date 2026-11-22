@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- PyPI release pipeline (trusted publishing, tag-driven, TestPyPI rehearsal) under the name `mapwright-agent`; version is single-sourced in `src/mapwright/__init__.py`; timeline markers centred on their line.
+
 - First-run UI: clear "Unauthorised" and "daemon not running" states, paste-link/token box, token remembered in the browser, "Forget token"; consistent control sizes and alignment.
 - Project-local homes: `mapwright init --local` / `--home DIR`, discovery via `.mapwright/home.json`, `MAPWRIGHT_HOME` written into generated MCP entries and Claude Code hook commands; `/v1/ping` reports the daemon's home.
 - Respect `.gitignore` by default (`respect_gitignore`), gitignore-style patterns in `ignore`, `max_files` now honoured and truncation reported (`init`, `doctor`, `state`), ignore suggestions on `init` (`--apply-ignore`); scans are deterministic and share no global state.

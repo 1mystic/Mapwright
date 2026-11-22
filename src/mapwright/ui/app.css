@@ -152,7 +152,7 @@ kbd { font: 11px/1 "JetBrains Mono", ui-monospace, monospace; padding: 2px 5px; 
 .tl { position: relative; padding-left: 26px } .tl::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 2px; background: var(--line) }
 .tstep { position: relative; padding: 10px 14px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin-bottom: 10px; cursor: pointer }
 [data-theme=light] .tstep { background: #fff } .tstep:hover { border-color: var(--faint) } .tstep.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset }
-.tstep::before { content: ""; position: absolute; left: -22px; top: 15px; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent) }
+.tstep::before { content: ""; position: absolute; left: -22px; top: 11px; width: 12px; height: 12px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent) }
 .tstep.live::before { border-color: var(--ok); background: var(--ok) } .tstep .h { display: flex; gap: 8px; align-items: center } .tstep .n { font: 600 12px "JetBrains Mono", monospace; color: var(--muted) }
 .tstep .ttl { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .tstep .when { color: var(--muted); font-size: 12px }
 .tstep .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px } .tstep .files { margin-top: 8px; display: flex; flex-direction: column; gap: 1px }
