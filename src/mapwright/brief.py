@@ -60,6 +60,9 @@ def project_brief(p, budget: int = 2400, focus: str | None = None) -> str:
         tbl = []
         for t, d in sorted(m["tables"].items()):
             cols = [col["name"] + (" PK" if col["pk"] else f" →{col['fk']}" if col["fk"] else "") for col in d["columns"]]
+            if d.get("kind") in ("firestore", "storage"):
+                tbl.append(f"{t} [{d['kind']} collection; {d['source']}]({_cut(list(d.get('ops', {})), 6)})")
+                continue
             tbl.append(f"{t}({_cut(cols, 6)})")
         sections.append(("Tables", tbl))
     if p.infra["nodes"]:
@@ -138,6 +141,9 @@ def symbol_card(p, ref: str) -> str:
         lines.append("methods: " + (_cut(n["methods"], 14) or "—"))
     elif kind == "tables":
         lines.append(f"table {sid} · {n['file']}:{n.get('line')}")
+        if n.get("kind") in ("firestore", "storage"):
+            lines.append(f"{n['kind']} collection {n.get('path')} from {n['source']}")
+            lines += [f"allow {op}: {cond}" for op, cond in n.get("ops", {}).items()]
         lines.append("columns: " + ", ".join(c["name"] + (" PK" if c["pk"] else f" →{c['fk']}" if c["fk"] else "") for c in n["columns"]))
         users = [fid.split(":")[-1] for fid, f in p.model["functions"].items() if sid in f.get("tables", [])]
         if users:
