@@ -158,7 +158,7 @@ the IDE); the UI follows the same New UI look.
  coding agent ──stdio──▶ mapwright mcp                   website: landing, docs, setup,
       │                     │                            live demo (static files only)
       └─hooks──▶ mapwright hook                                  ▲
-                            ▼                                    │ pipx install mapwright  ◀── PyPI
+                            ▼                                    │ pipx install mapwright-agent ◀── PyPI
             ~/.mapwright (steps, file versions)                  │ VS Code extension       ◀── Marketplace / Open VSX
                             ▼                                    │ Claude Code plugin      ◀── GitHub repo
             mapwright daemon → UI on 127.0.0.1
@@ -238,7 +238,7 @@ python scripts/build_site.py && firebase deploy --only hosting
 
 | What | Where | How |
 |---|---|---|
-| Python package | **PyPI** | `python -m build` then `twine upload dist/*` (create a PyPI account and an API token first). Users then run `pipx install mapwright`. |
+| Python package | **PyPI** | `python -m build` then `twine upload dist/*` (create a PyPI account and an API token first). Users then run `pipx install mapwright-agent` (the name `mapwright` is taken on PyPI; see RELEASING.md). |
 | VS Code extension | **VS Code Marketplace** and **Open VSX** (Cursor, Windsurf and VSCodium use Open VSX) | Change `publisher` in `integrations/vscode/package.json` to your publisher id, then `npx @vscode/vsce publish` and `npx ovsx publish`. |
 | Claude Code plugin | **your GitHub repository** | The root `.claude-plugin/marketplace.json` makes the repo a marketplace: `/plugin marketplace add <owner>/<repo>`. |
 | MCP server listing | MCP directories (for example the official MCP Registry) | List it as a local stdio server started with `mapwright mcp`. |

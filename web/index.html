@@ -1,4 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!doctype html><html lang="en"><head>
+<script>document.documentElement.classList.add('js')</script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mapwright — a live map of what your coding agent is building</title><meta name="description" content="Structure, architecture, data, cloud, logic and every step, drawn from the code as your agent writes it — and readable by the agent for a fraction of the tokens."><link rel="icon" href="assets/mark.svg"><link rel="stylesheet" href="assets/site.css"></head><body><header class="nav"><div class="wrap">
 <a class="brand" href="index.html"><img src="assets/mark.svg" alt="">Mapwright</a>
 <nav class="links"><a href="index.html#views" class="on">Views</a><a href="index.html#how">How it works</a><a href="index.html#verify">Verification</a><a href="index.html#agents">Agents</a><a href="docs.html">Docs</a><a href="setup.html">Setup &amp; deploy</a></nav>
@@ -8,7 +9,7 @@
 <h1>See what your coding agent is <em>actually building</em>.</h1>
 <p class="lead">Mapwright draws the structure, architecture, data model, cloud, API flows and logic of your project from the code, live, as the agent writes it. The agent reads the same map in about 600 tokens instead of exploring files — and everything it claims is checked against the code.</p>
 <div class="cta"><a class="btn primary" href="app/?demo"><svg class="i"><use href="assets/icons.svg#eye"/></svg> Open the live demo</a><a class="btn" href="setup.html"><svg class="i"><use href="assets/icons.svg#plug"/></svg> Set up in 2 minutes</a></div>
-<div class="install"><span><b>$</b> pipx install mapwright &amp;&amp; mapwright init --connect claude-code</span></div>
+<div class="install"><span><b>$</b> pipx install mapwright-agent &amp;&amp; mapwright init --connect claude-code</span></div>
 <div class="window"><div class="bar"><i></i><i></i><i></i><span>Mapwright — shop-api · 7 steps by the agent</span></div><img src="img/overview.png" alt="Mapwright overview of an order service built by an agent"></div>
 </div>
 <section id="views"><div class="wrap"><h2>Ten views of one project, at every step</h2><p class="sub">An IDE-style interface in dark or light. Click any box to inspect it, double-click to open the code, the flowchart or the call graph. Pick any earlier step and every view shows the project as it was then, with what changed outlined.</p>
