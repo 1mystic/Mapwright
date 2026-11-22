@@ -161,8 +161,8 @@ def test_connect_writes_and_removes_configs(proj, tmp_path):
     for t, sc in (("cursor", "project"), ("claude-code", "project"), ("codex", "user")):
         connect.uninstall(t, sc, root)
     assert set(json.loads((proj / ".cursor" / "mcp.json").read_text())["mcpServers"]) == {"other"}
-    assert "mapwright" not in (proj / ".claude" / "settings.local.json").read_text()
-    assert "mapwright" not in (tmp_path / "home" / ".codex" / "config.toml").read_text()
+    assert not (proj / ".claude" / "settings.local.json").exists()
+    assert not (tmp_path / "home" / ".codex" / "config.toml").exists()
     (proj / ".vscode" / "mcp.json").write_text("{ // comments are not JSON\n}")
     with pytest.raises(ValueError):
         connect.install("vscode", "project", root)
