@@ -121,6 +121,20 @@ def _hooks_path(scope: str, root: str) -> Path:
     return (Path(root) / ".claude/settings.local.json") if scope == "project" else _cc_dir() / "settings.json"
 
 
+_OWN_DIRS = {".claude", ".cursor", ".vscode", ".gemini"}
+
+
+def _remove_file(path: Path) -> None:
+    """Back up, then delete a config file that uninstall left with nothing in it; drop its directory if that is empty too."""
+    _backup(path)
+    path.unlink()
+    if path.parent.name in _OWN_DIRS and path.parent != Path.home():
+        try:
+            path.parent.rmdir()
+        except OSError:
+            pass
+
+
 def _claude_hooks(path: Path, on: bool) -> None:
     data = _load(path)
     hooks = data.get("hooks") or {}
@@ -138,7 +152,10 @@ def _claude_hooks(path: Path, on: bool) -> None:
         data["hooks"] = hooks
     else:
         data.pop("hooks", None)
-    _save(path, data)
+    if not on and not data:
+        _remove_file(path)
+    else:
+        _save(path, data)
 
 
 def install(target: str, scope: str = "project", root: str | None = None) -> list[str]:
@@ -203,8 +220,12 @@ def uninstall(target: str, scope: str = "project", root: str | None = None) -> l
         if spec["format"] == "toml":
             text = path.read_text()
             if _TOML_BLOCK.search(text):
-                _backup(path)
-                path.write_text(_TOML_BLOCK.sub("", text).rstrip() + "\n")
+                rest = _TOML_BLOCK.sub("", text).rstrip()
+                if rest:
+                    _backup(path)
+                    path.write_text(rest + "\n")
+                else:
+                    _remove_file(path)
                 changed.append(str(path))
         else:
             data = _load(path)
@@ -213,7 +234,12 @@ def uninstall(target: str, scope: str = "project", root: str | None = None) -> l
                 del data[key][NAME]
                 if not data[key]:
                     del data[key]
-                _save(path, data)
+                # opencode's $schema is added by install() itself, so it alone counts as empty
+                leftover = {"$schema": "https://opencode.ai/config.json"} if spec["format"] == "opencode" else {}
+                if data == leftover:
+                    _remove_file(path)
+                else:
+                    _save(path, data)
                 changed.append(str(path))
     if target == "claude-code":
         hp = _hooks_path(scope, root)
