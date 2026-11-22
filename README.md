@@ -46,7 +46,7 @@ at any earlier step:
 | **Architecture** | Modules grouped into layers (interface, services, data, integrations, UI …), imports, external packages | Python `ast`, JS/TS imports |
 | **Files** | How the project is organised, with added and changed files marked | the file tree |
 | **Classes** | Classes, attributes, methods, inheritance and "uses" links | Python, JS/TS |
-| **Data** | Tables, columns, keys and relations | SQL (also inside code strings), SQLAlchemy, Django, Prisma |
+| **Data** | Tables, columns, keys and relations | SQL (also inside code strings), SQLAlchemy, Django, Prisma, zod schemas, Firestore/Storage collections with their security rules |
 | **Cloud** | Containers, services, databases, caches, queues, buckets, functions, CI, external APIs | Dockerfile, compose, Terraform, Kubernetes, serverless, CI, `.env.example`, SDK imports |
 | **Processes** | Each HTTP route → handler → the functions it calls → the tables they touch | routes (FastAPI, Flask, Express, Next.js), call graph |
 | **Logic** | Every function by complexity, with algorithm hints, and a flowchart of its control flow | Python `ast` (JS/TS: outline) |
@@ -129,7 +129,8 @@ is passed through redaction. Nothing is sent anywhere.
 
 - Static analysis: dynamic imports, metaprogramming and tables created at runtime are not seen. Algorithm
   hints are hints.
-- Routes are found for FastAPI, Flask, Express-style routers and Next.js, not for hand-written `http.server` handlers.
+- Routes are found for FastAPI, Flask, Express-style routers, Next.js and React Router (config arrays, `<Route>` JSX, `lazyGroup`-style helpers; shown as `PAGE`), not for hand-written `http.server` handlers. Route arrays built dynamically or mounted under a layout in another file show only their own paths.
+- Firestore and Cloud Storage rules (`firestore.rules`, `storage.rules`) and static `collection()`/`doc()` calls appear as `firestore:`/`storage:` collections with allowed operations; paths built at runtime, and Firestore use from Python, are not seen. SQL inside content strings (e.g. quiz text) can still be reported as tables.
 - Structure is drawn for Python, JS/TS, SQL and Prisma. Other languages are tracked for changes but not drawn.
 - JS/TS flowcharts are an outline (branches and calls in order), not a full parse.
 - Steps close at turn ends only with hooks (Claude Code, opencode); elsewhere the agent calls `step` or a quiet period closes it.

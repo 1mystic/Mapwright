@@ -9,7 +9,7 @@ Status key: **done** · **in progress** · **planned**. Updated as work merges t
 | 1 | First-run UX: unauthorised state, paste-link/token box, remembered token | done |
 | 2 | Project-local home: `init --local` / `--home DIR`, env in MCP config and hooks, ignore entries | done |
 | 3 | Ignore handling: `.gitignore` by default, glob patterns, init suggestions, `max_files` warning | done |
-| 4 | TS/React: react-router route tables, Firestore rules and collections as a data source, zod, components | in progress |
+| 4 | TS/React: react-router route tables, Firestore rules and collections as a data source, zod, components | done |
 | 5 | Hooks: clean step titles, subagent-safe `auto_step=turn`, noise (lockfiles, generated, ignored) excluded | done |
 | 6 | `disconnect` removes config files it leaves empty | done |
 | 7 | UI polish: consistent alignment of buttons, icons and panels | done |
