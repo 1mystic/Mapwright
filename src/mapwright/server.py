@@ -193,6 +193,7 @@ class Daemon:
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(raw)))
                 self.send_header("Cache-Control", "no-store")
+                self._cors()
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Referrer-Policy", "no-referrer")
                 if ctype.startswith("text/html"):
@@ -200,12 +201,34 @@ class Daemon:
                 self.end_headers()
                 self.wfile.write(raw)
 
+            def _allowed_origin(self):
+                o = self.headers.get("Origin")
+                return o if o and (o in d.origins or o in config.settings()["web_origins"]) else None
+
+            def _cors(self) -> None:
+                o = self._allowed_origin()
+                if o and o not in d.origins:  # a hosted site on the allowlist; same-origin needs no headers
+                    self.send_header("Access-Control-Allow-Origin", o)
+                    self.send_header("Access-Control-Allow-Private-Network", "true")
+                    self.send_header("Vary", "Origin")
+
+            def do_OPTIONS(self):
+                if self.headers.get("Host") not in d.hosts or not self._allowed_origin():
+                    return self._send(403, {"error": "origin not allowed"})
+                self.send_response(204)
+                self._cors()
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+                self.send_header("Access-Control-Max-Age", "600")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
             def _guard(self) -> bool:
                 if self.headers.get("Host") not in d.hosts:
                     self._send(403, {"error": "bad host"})
                     return False
                 origin = self.headers.get("Origin")
-                if origin and origin not in d.origins:
+                if origin and not self._allowed_origin():
                     self._send(403, {"error": "cross-origin requests are not accepted"})
                     return False
                 auth = self.headers.get("Authorization", "")

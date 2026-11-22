@@ -18,7 +18,7 @@ Status key: **done** · **in progress** · **planned**. Updated as work merges t
 
 Static site; the browser talks to the user's own local daemon, so no code or data leaves the machine.
 
-- Daemon: exact-origin allowlist and CORS preflight for the official site; token still required.
+- Daemon: exact-origin allowlist and CORS preflight for the official site; token still required. **done** (`web_origins`, `open --web`)
 - Handle browser local-network permission prompts; fall back to the daemon-served UI where blocked (Safari).
 - Site: landing, docs, live demo, connect guide generating `connect` commands, MCP and skill snippets.
 - Hosting: Cloudflare Pages (primary), GitHub Pages (backup, workflow exists), Firebase Hosting (config exists).

@@ -209,7 +209,15 @@ def cmd_open(a):
         sys.exit(1)
     if st == "none":
         subprocess.run([sys.executable, "-m", "mapwright", "up", "-d"], stdout=subprocess.DEVNULL, check=False, env=_daemon_env())
-    url = f"{config.base_url()}/#p={p.key}&t={config.token()}"
+    if a.web:
+        site = (a.site or (config.settings()["web_origins"] or [""])[0]).rstrip("/")
+        if not site:
+            sys.exit("no hosted site configured: mapwright open --web --site https://...  (or set web_origins)")
+        if site not in config.settings()["web_origins"]:
+            config.save_settings({"web_origins": [*config.settings()["web_origins"], site]})  # the daemon must allow this origin
+        url = f"{site}/app/#a={config.base_url()}&p={p.key}&t={config.token()}"
+    else:
+        url = f"{config.base_url()}/#p={p.key}&t={config.token()}"
     if a.json:
         print(json.dumps({"url": url, "key": p.key, "root": p.root}))
         return
@@ -506,6 +514,8 @@ def main(argv=None) -> int:
     x = add("open", cmd_open, "Open the map in the browser.")
     x.add_argument("--print", action="store_true", help="print the URL only")
     x.add_argument("--json", action="store_true")
+    x.add_argument("--web", action="store_true", help="open the hosted website, connected to your local daemon")
+    x.add_argument("--site", help="hosted site origin for --web (default: first of the web_origins setting)")
     x = add("status", cmd_status, "Steps, pending changes, todos.")
     x.add_argument("--json", action="store_true")
     x = add("brief", cmd_brief, "The project map as compact text for an agent.")

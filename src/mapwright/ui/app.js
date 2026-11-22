@@ -21,7 +21,15 @@
 
   // ------------------------------------------------------------------ data source
   const params = new URLSearchParams(location.hash.slice(1));
-  const DEMO = new URLSearchParams(location.search).has("demo") || document.documentElement.dataset.demo === "1";
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  // Hosted page (not served by the daemon): talk to the user's own daemon on localhost; only a loopback address is accepted.
+  const LOCAL_HOST = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  const okBase = (u) => /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/.test(u || "");
+  if (okBase(params.get("a"))) lsSet("mw.a", params.get("a"));
+  const BASE = LOCAL_HOST ? "" : (okBase(lsGet("mw.a")) ? lsGet("mw.a") : "http://127.0.0.1:7979");
+  if (params.get("t") && !LOCAL_HOST) lsSet("mw.live", "1");
+  const DEMO = new URLSearchParams(location.search).has("demo") || (document.documentElement.dataset.demo === "1" && !lsGet("mw.live"));
   let token = params.get("t");
   const TOKEN_RE = /^[A-Za-z0-9._~+\-]{8,}$/;
   const tokenStore = {
@@ -43,7 +51,7 @@
       throw new Error("not in demo");
     }
     let r;
-    try { r = await fetch(path, { method: method || (body !== undefined ? "POST" : "GET"), cache: "no-store",
+    try { r = await fetch(BASE + path, { method: method || (body !== undefined ? "POST" : "GET"), cache: "no-store",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined }); }
     catch (e) { throw Object.assign(new Error("daemon not reachable"), { network: true }); }
     const data = await r.json().catch(() => ({}));

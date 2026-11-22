@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 from pathlib import Path
 
@@ -17,6 +18,7 @@ DEFAULTS = {
     "brief_budget": 2400,         # characters in `map` / `brief` (about 600 tokens)
     "max_files": 5000,
     "ignore": [],                 # extra names or gitignore-style patterns to skip (e.g. "public/bank/**", "*.pdf")
+    "web_origins": ["https://mapwright.pages.dev"],  # hosted sites allowed to call this daemon from the browser (exact origins; the token is still required)
     "respect_gitignore": True,    # also skip what .gitignore / .git/info/exclude ignore
     "redact": True,
     "keep_blobs_days": 0,         # 0 = keep every file version
@@ -166,6 +168,8 @@ def save_settings(changes: dict) -> dict:
             ok = isinstance(v, str)
         if k == "theme" and v not in ("dark", "light"):
             ok = False
+        if k == "web_origins" and ok and not all(re.fullmatch(r"https://[A-Za-z0-9.-]+(:\d{2,5})?|http://(127\.0\.0\.1|localhost)(:\d{2,5})?", x) for x in v):
+            ok = False  # exact origins only: no paths, no wildcards, https unless loopback
         if k == "auto_step" and v not in ("turn", "idle", "off"):
             ok = False
         if k == "brief_budget" and ok and not 400 <= v <= 20000:

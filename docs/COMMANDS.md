@@ -9,7 +9,7 @@ current folder (or `--path DIR`).
 |---|---|
 | `mapwright init [--connect AGENT] [--agents-md [FILE]] [--local \| --home DIR] [--apply-ignore]` | Track this project; the current state becomes step 0. Warns when `max_files` truncates the scan and suggests ignores for bulky generated/data folders (`--apply-ignore` saves them) |
 | `mapwright init --local` / `--home DIR` | Keep this project's history in `<project>/.mapwright` (or DIR, relative to the project root) instead of `~/.mapwright`. Creates it with mode 0700, writes the marker `.mapwright/home.json`, adds it to `.gitignore`. With `--connect X` the MCP entry gets `env.MAPWRIGHT_HOME` and Claude Code hooks are prefixed with `MAPWRIGHT_HOME=…` |
-| `mapwright open [--print] [--json]` | Open the map in the browser (starts the daemon if needed) |
+| `mapwright open [--print] [--json] [--web [--site URL]]` | Open the map in the browser (starts the daemon if needed). `--web` opens the hosted website instead; its page calls your local daemon directly (the token travels in the URL hash, never to the host), and the site is added to `web_origins` |
 | `mapwright up [-d] [--no-watch]` · `mapwright down` | Start (foreground or background) or stop the daemon |
 | `mapwright watch` | Track from the files alone, without the daemon or any agent integration |
 | `mapwright doctor` | Check the setup |
@@ -74,6 +74,7 @@ print-only: `cline`, `zed`, `jetbrains`, `any`.
 | `watch_interval` | `2.0` | Seconds between scans while the daemon runs |
 | `brief_budget` | `2400` | Characters in `map` / `brief` (about 600 tokens) |
 | `max_files` | `5000` | Cap on tracked files. When hit, `init`, `doctor` and `state` (`truncated_info`) show files seen and the folders that used the budget |
+| `web_origins` | `["https://mapwright.pages.dev"]` | Hosted sites allowed to call this daemon from the browser. Exact origins only (https, or loopback http); the token is still required |
 | `respect_gitignore` | `true` | Skip files matched by `.gitignore` (root and nested) and `.git/info/exclude` |
 | `ignore` | `[]` | Extra names or gitignore-style patterns, e.g. `["public/question-bank/**", "*.pdf", "apps/*/dist"]`. Plain names match at any depth; `!pattern` re-includes something `.gitignore` excludes |
 | `redact` | `true` | Redact secrets in code shown in the UI |
