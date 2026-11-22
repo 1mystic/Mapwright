@@ -16,7 +16,8 @@ DEFAULTS = {
     "watch_interval": 2.0,        # seconds between scans of tracked projects while the daemon runs
     "brief_budget": 2400,         # characters in `map` / `brief` (about 600 tokens)
     "max_files": 5000,
-    "ignore": [],                 # extra directory names to skip
+    "ignore": [],                 # extra names or gitignore-style patterns to skip (e.g. "public/bank/**", "*.pdf")
+    "respect_gitignore": True,    # also skip what .gitignore / .git/info/exclude ignore
     "redact": True,
     "keep_blobs_days": 0,         # 0 = keep every file version
 }
@@ -160,7 +161,7 @@ def save_settings(changes: dict) -> dict:
             ok = isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
             v = type(want)(v) if ok else v
         elif isinstance(want, list):
-            ok = isinstance(v, list) and all(isinstance(x, str) and x and "/" not in x for x in v)
+            ok = isinstance(v, list) and all(isinstance(x, str) and x.strip() and "\n" not in x for x in v)
         else:
             ok = isinstance(v, str)
         if k == "theme" and v not in ("dark", "light"):

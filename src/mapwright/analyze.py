@@ -11,6 +11,7 @@ HTTP routes, tables, layers, concepts (see concepts.py) and infrastructure (see 
 from __future__ import annotations
 
 import ast
+from collections import Counter
 import hashlib
 import json
 import os
@@ -55,24 +56,42 @@ def find_root(cwd: str) -> str:
     return str(p)
 
 
-def scan(root: str) -> tuple[dict[str, tuple[int, int]], bool]:
-    """rel path -> (mtime_ns, size) for every file worth tracking. Second value: hit the file cap."""
+def scan(root: str, matcher=None, max_files: int | None = None, info: dict | None = None) -> tuple[dict[str, tuple[int, int]], bool]:
+    """rel path -> (mtime_ns, size) for every file worth tracking, in sorted order. Second value: hit the file cap.
+
+    `matcher` (ignore.Matcher) adds user/.gitignore exclusions; no module state is touched. When `info` is given it
+    is filled with {"seen", "cap", "top"}: candidate files counted past the cap and top-level dirs by files kept.
+    """
+    cap = max_files if max_files else MAX_FILES
     out: dict[str, tuple[int, int]] = {}
+    seen, truncated = 0, False
     for dirpath, dirs, files in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in IGNORE_DIRS and not d.endswith(".egg-info"))
-        for f in files:
-            full = os.path.join(dirpath, f)
-            rel = os.path.relpath(full, root)
+        rd = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        rd = "" if rd == "." else rd
+        dirs[:] = sorted(d for d in dirs if d not in IGNORE_DIRS and not d.endswith(".egg-info")
+                         and not (matcher and matcher.matches(f"{rd}/{d}" if rd else d, True)))
+        for f in sorted(files):
+            rel = f"{rd}/{f}" if rd else f
             if not (_texty(rel) or _secretish(rel)):
                 continue
+            if matcher and matcher.matches(rel, False):
+                continue
+            seen += 1
+            if truncated:
+                continue
             try:
-                st = os.stat(full)
+                st = os.stat(os.path.join(dirpath, f))
             except OSError:
+                seen -= 1
                 continue
             out[rel] = (st.st_mtime_ns, st.st_size)
-            if len(out) >= MAX_FILES:
-                return out, True
-    return out, False
+            if len(out) >= cap:
+                truncated = True
+    if info is not None:
+        top = Counter(r.split("/")[0] if "/" in r else "(root)" for r in out)
+        info.clear()
+        info.update({"seen": seen, "cap": cap, "top": [{"dir": d, "files": n} for d, n in top.most_common(5)]})
+    return out, truncated
 
 
 def read_text(root: str, rel: str) -> str | None:
