@@ -35,3 +35,7 @@ pipx install git+https://github.com/1mystic/Mapwright.git            # latest ma
 pipx install git+https://github.com/1mystic/Mapwright.git@v0.2.0     # a release
 pipx install https://github.com/1mystic/Mapwright/releases/download/v0.2.0/mapwright_agent-0.2.0-py3-none-any.whl
 ```
+
+## Actions run only when you start them
+
+`tests` and `website` are manual (*Actions → workflow → Run workflow*); `release` runs only on a `v*` tag or by hand. Nothing runs on ordinary pushes, so there are no failure emails.

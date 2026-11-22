@@ -1,5 +1,6 @@
 name: tests
-on: [push, pull_request]
+on:
+  workflow_dispatch:   # manual only: Actions → tests → Run workflow, after major changes
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -1,8 +1,6 @@
 name: website
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:   # manual only; the site is deployed by Cloudflare Pages
 permissions:
   contents: read
   pages: write
