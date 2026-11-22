@@ -225,7 +225,7 @@ def classes(model: dict, marks: dict, prev: dict | None = None) -> dict:
 def erd(model: dict, marks: dict, prev: dict | None = None) -> dict:
     tables = _with_removed(model["tables"], (prev or {}).get("tables"), marks.get("tables", {}))
     if not tables:
-        return {"mermaid": 'erDiagram\n  NO_TABLES_YET {\n    string hint "SQL, SQLAlchemy, Django or Prisma models appear here"\n  }',
+        return {"mermaid": 'erDiagram\n  NO_TABLES_YET {\n    string hint "SQL, SQLAlchemy, Django, Prisma, zod or Firestore collections appear here"\n  }',
                 "nodes": {}, "note": ""}
     names = {k: word(k, "table") for k in tables}
     low = {k.lower(): k for k in tables}
@@ -236,6 +236,8 @@ def erd(model: dict, marks: dict, prev: dict | None = None) -> dict:
         for c in tables[k]["columns"][:30]:
             key = " PK" if c["pk"] else " FK" if c["fk"] else ""
             lines.append(f'    {word(c["type"], "col")} {word(c["name"], "col")}{key}')
+        for op, cond in list(tables[k].get("ops", {}).items())[:8]:  # Firestore rules: allowed operations
+            lines.append(f'    rule {word(op, "op")} "{label(cond, 40)}"')
         lines.append("  }")
     for k in sorted(tables):
         for c in tables[k]["columns"]:

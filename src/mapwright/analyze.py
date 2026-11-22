@@ -18,12 +18,15 @@ import re
 import sys
 from pathlib import Path
 
+from mapwright import firestore as _fs
+from mapwright import routes_js as _rjs
+
 IGNORE_DIRS = {".git", "node_modules", ".venv", "venv", "env", "__pycache__", "dist", "build", ".tox", ".mypy_cache",
                ".pytest_cache", ".ruff_cache", ".next", ".nuxt", "target", "vendor", ".idea", ".vscode", "coverage",
                ".cache", "site-packages", ".eggs", ".terraform", ".gradle", "htmlcov", ".mapwright", ".svelte-kit", ".turbo",
                ".parcel-cache", ".output", "out", "bower_components", ".serverless"}
 CODE_EXT = {".py": "python", ".js": "js", ".jsx": "js", ".mjs": "js", ".cjs": "js", ".ts": "js", ".tsx": "js",
-            ".sql": "sql", ".prisma": "prisma"}
+            ".sql": "sql", ".prisma": "prisma", ".rules": "rules"}
 TEXT_EXT = set(CODE_EXT) | {".md", ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".html", ".css", ".scss", ".sh",
                             ".go", ".rs", ".java", ".rb", ".php", ".c", ".h", ".cpp", ".txt", ".graphql", ".proto",
                             ".kt", ".swift", ".cs", ".vue", ".svelte", ".tf", ".xml"}
@@ -253,7 +256,19 @@ def analyze_js(rel: str, text: str) -> dict:
             if t["name"] not in {x["name"] for x in out["tables"]}:
                 out["tables"].append({**t, "line": text.count("\n", 0, m.start()) + t["line"], "source": "sql in code"})
     out["sql_tables"] = sorted(set(_SQL_REF.findall(text)))[:40]
+    _js_extras(rel, text, out)
     return out
+
+
+def _js_extras(rel: str, text: str, out: dict) -> None:
+    """Client routes (react-router), Firestore collections, zod schemas and React tags: see routes_js / firestore."""
+    out["routes"] += _rjs.find_routes(rel, text)
+    usage = _fs.find_usage(text)
+    have = {t["name"] for t in out["tables"]}
+    out["tables"] += [t for t in _fs.usage_tables(text) if t["name"] not in have]
+    _fs.function_refs(usage, out["functions"])
+    out["tables"] += [t for t in _rjs.zod_schemas(text) if t["name"] not in have]
+    _rjs.tag_react(rel, text, out["functions"])
 
 
 _SQL_TABLE = re.compile(r"create\s+table\s+(?:if\s+not\s+exists\s+)?[`\"\[]?([\w.]+)[`\"\]]?\s*\(", re.I)
@@ -332,7 +347,7 @@ def analyze_prisma(rel: str, text: str) -> dict:
     return out
 
 
-ANALYZERS = {"python": analyze_python, "js": analyze_js, "sql": analyze_sql, "prisma": analyze_prisma}
+ANALYZERS = {"python": analyze_python, "js": analyze_js, "sql": analyze_sql, "prisma": analyze_prisma, "rules": _fs.analyze_rules}
 
 
 
@@ -624,7 +639,10 @@ def link(parts: dict[str, dict]) -> dict:
             classes[f'{p["id"]}:{c["name"]}'] = {**c, "module": p["id"], "file": rel}
         for t in p["tables"]:
             if t["name"] in tables:  # the same table in SQL and in an ORM model: keep the first, note the other
-                tables[t["name"]].setdefault("also_in", []).append(rel)
+                if t.get("kind") == "firestore":
+                    _fs.merge(tables[t["name"]], {**t, "file": rel}, rel)
+                else:
+                    tables[t["name"]].setdefault("also_in", []).append(rel)
             else:
                 tables[t["name"]] = {**t, "file": rel}
         for f in p.get("functions", []):
@@ -681,6 +699,7 @@ def link(parts: dict[str, dict]) -> dict:
         for x in f["callees"]:
             if x != fid:
                 functions[x]["callers"].append(fid)
+    routes = _rjs.drop_shadowed(routes)
     for r in routes:
         h = r.get("handler")
         if h:
@@ -698,6 +717,7 @@ def link(parts: dict[str, dict]) -> dict:
         for t in f.get("sql_refs", []):
             if t.lower() in tlow:
                 touched.add(tlow[t.lower()])
+        touched |= {k for k in f.get("fs_refs", []) if k in tables}
         f["tables"] = sorted(touched)
     return {"modules": modules, "classes": classes, "tables": tables, "functions": functions, "routes": routes}
 
@@ -705,7 +725,7 @@ def link(parts: dict[str, dict]) -> dict:
 def _sig(kind: str, node: dict) -> str:
     if kind == "modules":
         return node["sha"]
-    keys = {"classes": ("bases", "attrs", "methods"), "tables": ("columns",),
+    keys = {"classes": ("bases", "attrs", "methods"), "tables": ("columns", "ops"),
             "functions": ("args", "calls", "complexity", "loc", "decorators")}[kind]
     return json.dumps([node.get(k) for k in keys], sort_keys=True)
 
