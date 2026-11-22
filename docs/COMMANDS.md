@@ -15,6 +15,21 @@ current folder (or `--path DIR`).
 | `mapwright doctor` | Check the setup |
 | `mapwright guide` | Quick reference |
 
+## Stopping Mapwright
+
+| I want to… | Do this |
+|---|---|
+| Stop the map server (daemon) | `mapwright down` (started with `up -d` or `open`) · **Ctrl-C** if `mapwright up` runs in a terminal |
+| Stop `mapwright watch` | **Ctrl-C** |
+| Stop it if `down` does not answer | `pkill -f "mapwright up"` (it also frees port 7979) |
+| Stop an agent from recording steps in this project | `mapwright disconnect claude-code` (also `cursor`, `vscode`, …; add `--scope user` if you connected it for every project). Restart the agent afterwards |
+| Pause automatic steps but keep everything else | `mapwright settings auto_step off` |
+| Remove all recorded history | stop the daemon, then delete the home: `~/.mapwright`, or `<project>/.mapwright` for a project-local home (`init --local`) |
+| Remove the tool | `pipx uninstall mapwright-agent` (or `pip uninstall mapwright-agent`) |
+
+The daemon only serves the map and watches files; the MCP server and hooks the agent starts are separate and exit
+with the agent. Stopping the daemon never touches your project files.
+
 ## Agents
 
 | Command | What it does |

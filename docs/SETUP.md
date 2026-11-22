@@ -59,7 +59,7 @@ mapwright open
 ```
 
 This starts the local daemon (`http://127.0.0.1:7979`) if it is not running and opens the browser. The
-link carries a local token; don't share it. Stop the daemon with `mapwright down`.
+link carries a local token; don't share it. Stop the daemon with `mapwright down` (full list in [COMMANDS.md](COMMANDS.md#stopping-mapwright)).
 
 ---
 
