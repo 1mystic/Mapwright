@@ -93,7 +93,7 @@ def test_install_formats_include_env(proj):
     connect.install("codex", "user", str(proj), home=h)
     connect.install("codex", "user", str(proj), home=h)  # reinstall replaces the env table too
     import pathlib
-    import tomllib
+    tomllib = pytest.importorskip("tomllib")  # Python 3.11+
     toml = tomllib.loads((pathlib.Path.home() / ".codex/config.toml").read_text())
     assert toml["mcp_servers"]["mapwright"]["env"]["MAPWRIGHT_HOME"] == h
 

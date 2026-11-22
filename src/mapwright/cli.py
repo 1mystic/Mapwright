@@ -242,7 +242,7 @@ def cmd_status(a):
     print(f"  {k['files']} files · {k['modules']} modules · {k['functions']} functions · {k['classes']} classes · {k['tables']} tables · "
           f"{k['routes']} routes · {k['concepts']} mechanisms · {k['infra']} infra nodes")
     for s in st["steps"][-5:]:
-        print(f"  {c(str(s['n']).rjust(3), DIM)} {s['title'][:70]}  {c(f'+{s['summary']['added']}/-{s['summary']['removed']}', DIM)}"
+        print(f"  {c(str(s['n']).rjust(3), DIM)} {s['title'][:70]}  {c('+%d/-%d' % (s['summary']['added'], s['summary']['removed']), DIM)}"
               + (c(f"  ⚠ {s['title_check']}", AMBER) if s.get("title_check", "ok") != "ok" else ""))
     todos = [t for t in st["todos"] if t["status"] == "open"]
     if todos:
@@ -277,7 +277,7 @@ def cmd_steps(a):
         sm = s["summary"]
         delta = "; ".join(f"{k} " + ", ".join(f"{n} {st}" for st, n in v.items()) for k, v in sm["delta"].items())
         print(f"{c(str(s['n']).rjust(3), BLUE)} {time.strftime('%H:%M', time.localtime(s['ts']))} {c(s['source'][:5], DIM)} "
-              f"{s['title'][:60]}  {c(f'{sm['files']} files +{sm['added']}/-{sm['removed']}', DIM)}  {delta}")
+              f"{s['title'][:60]}  {c('%d files +%d/-%d' % (sm['files'], sm['added'], sm['removed']), DIM)}  {delta}")
 
 
 def cmd_changes(a):

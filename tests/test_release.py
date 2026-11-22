@@ -1,15 +1,15 @@
 import re
-import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_version_is_single_sourced():
-    meta = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    assert "version" in meta["project"]["dynamic"] and "version" not in meta["project"]
-    assert meta["tool"]["hatch"]["version"]["path"] == "src/mapwright/__init__.py"
-    assert meta["project"]["name"] == "mapwright-agent"
+    toml = (ROOT / "pyproject.toml").read_text()
+    project = toml.split("[project]", 1)[1].split("\n[", 1)[0]
+    assert 'dynamic = ["version"]' in project and not re.search(r"^version\s*=", project, re.M)
+    assert 'path = "src/mapwright/__init__.py"' in toml
+    assert 'name = "mapwright-agent"' in project
     assert re.search(r'__version__ = "\d+\.\d+\.\d+"', (ROOT / "src/mapwright/__init__.py").read_text())
 
 
