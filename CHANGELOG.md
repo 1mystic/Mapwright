@@ -8,6 +8,7 @@
 - Auto steps get short clean titles instead of raw prompts, skip noise-only changes (lockfiles, generated output), ignore subagent and overlapping-session stops; read-only Bash calls are no longer journaled.
 - Detect React Router routes (config arrays, JSX, lazy groups), Firestore/Storage security rules and collection usage as data collections, zod schemas as entities, and tag React components and hooks.
 - Hosted website support: `web_origins` allowlist with CORS and private-network preflight in the daemon, `mapwright open --web`, and a UI that talks to a loopback daemon when served from a hosted site (demo stays the default until a token link is used).
+- System view (default tab): an abstract icon diagram of clients, interface, logic, data, outside services and platform built from the analysis; click a component to see its files, routes, tables and most complex functions in the Inspector; new and changed components are marked.
 - `mapwright disconnect` deletes config files (and empty tool folders) it leaves empty.
 
 ## 0.1.0

@@ -23,7 +23,7 @@ Static site; the browser talks to the user's own local daemon, so no code or dat
 - Site: landing, docs, live demo, connect guide generating `connect` commands, MCP and skill snippets.
 - Hosting: Cloudflare Pages (primary), GitHub Pages (backup, workflow exists), Firebase Hosting (config exists).
 
-## Phase 2b: System view (default landing view, app and site)
+## Phase 2b: System view (default landing view, app and site) — first version done; polish after real-world feedback
 
 An abstract, illustrative system-design diagram drawn with icons: clients, UI, API gateway/routes, services,
 workers/queues, databases and caches, storage, external APIs, CI/hosting. Built from data Mapwright already has

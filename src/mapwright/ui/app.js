@@ -62,7 +62,7 @@
 
   // ------------------------------------------------------------------ state
   const FIXED = [
-    { id: "overview", title: "Overview", icon: "eye" }, { id: "d:architecture", title: "Architecture", icon: "layers" },
+    { id: "system", title: "System", icon: "graph" }, { id: "overview", title: "Overview", icon: "eye" }, { id: "d:architecture", title: "Architecture", icon: "layers" },
     { id: "d:files", title: "Files", icon: "folder" }, { id: "d:classes", title: "Classes", icon: "class" },
     { id: "d:data", title: "Data", icon: "database" }, { id: "d:cloud", title: "Cloud", icon: "cloud" },
     { id: "d:processes", title: "Processes", icon: "route" }, { id: "logic", title: "Logic", icon: "function" },
@@ -73,7 +73,7 @@
   const LAYER_COLOR = { interface: "#3574f0", ui: "#2aacb8", service: "#5fb865", core: "#9b8cff", data: "#c77dbb", integration: "#e5a13e", util: "#868a91", config: "#b3ae60", test: "#6f737a" };
   const S = {
     projects: [], key: params.get("p") || store.get("key", null), st: null, model: null, modelFor: null, version: -1,
-    step: "live", base: "auto", tabs: store.get("tabs", []), active: store.get("active", "overview"), left: store.get("left", "project"),
+    step: "live", base: "auto", tabs: store.get("tabs", []), active: store.get("active", "system"), left: store.get("left", "project"),
     leftOpen: store.get("leftOpen", true), rightOpen: store.get("rightOpen", true), bottomOpen: store.get("bottomOpen", true), btab: store.get("btab", "steps"),
     sel: null, settings: null, integ: null, brief: null, expanded: new Set(store.get("expanded", [])), view: {}, fnFilter: "", fnSel: null, conn: "connecting",
   };
@@ -348,6 +348,7 @@
     else if (id.startsWith("d:")) diagramView(v, id.slice(2));
     else if (id === "logic") logicView(v);
     else if (id === "concepts") conceptsView(v);
+    else if (id === "system") systemView(v);
     else if (id === "timeline") timelineView(v);
     else if (id === "setup") setupView(v);
     else if (id.startsWith("file:")) fileView(v, id.slice(5));
@@ -366,6 +367,89 @@
       row.append(inp, go); b.append(row, el("p", null, "Or run `mapwright init` inside the project. Then connect your agent from the Connect panel."));
     }
     w.append(b); v.append(w);
+  }
+
+  // ---- system view: an abstract, icon-based picture of the whole system, built from the analysis
+  const SYS_NODE = { w: 184, h: 84, gx: 64, gy: 22, top: 56, left: 28 };
+  async function buildSystem() {
+    const m = await model(), st = S.st, files = st.files || [];
+    const byLayer = {}; for (const mod of Object.values(m.modules || {})) (byLayer[mod.layer] = byLayer[mod.layer] || []).push(mod.file);
+    const status = (paths) => { const set = new Set(paths); let a = 0, c = 0; for (const f of files) if (set.has(f.path)) { if (f.status === "A") a++; else if (f.status === "M") c++; } return a ? "new" : c ? "changed" : null; };
+    const fileRows = (paths) => [...new Set(paths)].sort().map((p) => ({ label: base(p), meta: p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "", run: () => openFile(p) }));
+    const fnRows = (paths) => { const set = new Set(paths); return Object.entries(m.functions || {}).filter(([, f]) => set.has(f.file)).sort((a, b) => (b[1].complexity || 0) - (a[1].complexity || 0)).slice(0, 12).map(([id, f]) => ({ label: f.qual, meta: `cx ${f.complexity || 0}`, run: () => select({ kind: "function", ref: id, file: f.file, line: f.line }) })); };
+    const infra = (st.infra && st.infra.nodes) || [];
+    const infraRows = (nodes) => nodes.map((n) => ({ label: n.label, meta: n.kind, run: () => select({ kind: "infra", ref: n.id }) }));
+    const comps = [];
+    const add = (c) => { c.sections = c.sections || []; c.stats = c.stats || []; c.state = c.state || status(c.files || []); comps.push(c); };
+    const routes = m.routes || [], pages = routes.filter((r) => r.method === "PAGE"), api = routes.filter((r) => r.method !== "PAGE");
+    const routeRows = (rs) => rs.slice(0, 40).map((r) => ({ label: `${r.method} ${r.path}`, meta: r.handler || "", run: () => (r.fid ? select({ kind: "function", ref: r.fid, file: r.file, line: r.line }) : r.file && openFile(r.file, r.line)) }));
+    add({ id: "clients", tier: 0, icon: "user", title: "Users & clients", sub: pages.length ? `${pages.length} pages` : "browsers · apps · agents", desc: "Whoever or whatever calls the system: people in a browser, other services, agents.",
+      files: [], stats: [["pages", pages.length], ["API routes", api.length]], sections: [{ title: "Pages", rows: routeRows(pages) }] });
+    const ui = byLayer.ui || [], itf = byLayer.interface || [];
+    if (ui.length || pages.length) add({ id: "ui", tier: 1, icon: "eye", title: "User interface", sub: `${ui.length} modules`, desc: "Screens and components the user sees.", files: ui,
+      stats: [["modules", ui.length], ["functions", fnRows(ui).length ? Object.values(m.functions || {}).filter((f) => ui.includes(f.file)).length : 0]], sections: [{ title: "Modules", rows: fileRows(ui) }, { title: "Most complex", rows: fnRows(ui) }] });
+    if (itf.length || api.length) add({ id: "api", tier: 1, icon: "route", title: "API & interface", sub: api.length ? `${api.length} routes` : `${itf.length} modules`, desc: "Entry points: HTTP routes, CLI commands, handlers.", files: itf,
+      stats: [["routes", api.length], ["modules", itf.length]], sections: [{ title: "Routes", rows: routeRows(api) }, { title: "Modules", rows: fileRows(itf) }, { title: "Most complex", rows: fnRows(itf) }] });
+    const svc = byLayer.service || [], core = byLayer.core || [];
+    if (svc.length) add({ id: "services", tier: 2, icon: "box", title: "Services", sub: `${svc.length} modules`, desc: "Business logic: what the system actually does.", files: svc,
+      stats: [["modules", svc.length]], sections: [{ title: "Modules", rows: fileRows(svc) }, { title: "Most complex", rows: fnRows(svc) }] });
+    if (core.length) add({ id: "core", tier: 2, icon: "function", title: "Core logic", sub: `${core.length} modules`, desc: "Shared domain code used by the other layers.", files: core,
+      stats: [["modules", core.length]], sections: [{ title: "Modules", rows: fileRows(core) }, { title: "Most complex", rows: fnRows(core) }] });
+    const tables = Object.entries(m.tables || {}), dbNodes = infra.filter((n) => n.kind === "db");
+    const dfiles = [...(byLayer.data || []), ...tables.map(([, t]) => t.file).filter(Boolean)];
+    if (tables.length || dbNodes.length || (byLayer.data || []).length) add({ id: "db", tier: 3, icon: "database", title: "Database", sub: tables.length ? `${tables.length} tables` : dbNodes[0]?.label || "data layer", desc: "Where data is stored: tables, collections and their access rules.", files: dfiles,
+      stats: [["tables", tables.length], ["engines", dbNodes.length]], sections: [{ title: "Engines", rows: infraRows(dbNodes) }, { title: "Tables and collections", rows: tables.map(([k, t]) => ({ label: t.name || k, meta: t.kind || t.source || "", run: () => select({ kind: "table", ref: k, file: t.file, line: t.line }) })) }, { title: "Data code", rows: fileRows(byLayer.data || []) }] });
+    for (const [kind, id, ic, title, d] of [["cache", "cache", "bolt", "Cache", "Fast temporary storage in front of slower data."], ["queue", "queue", "radio", "Queue & jobs", "Work handed off to run later or elsewhere."], ["search", "search", "search", "Search", "Full-text or vector search index."]]) {
+      const ns = infra.filter((n) => n.kind === kind); if (ns.length) add({ id, tier: 3, icon: ic, title, sub: ns.map((n) => n.label).join(", "), desc: d, files: [], stats: [["nodes", ns.length]], sections: [{ title: "Found in", rows: infraRows(ns) }] });
+    }
+    const intg = byLayer.integration || [], ext = infra.filter((n) => n.kind === "external" || n.kind === "cloud");
+    if (intg.length) add({ id: "integrations", tier: 4, icon: "plug", title: "Integrations", sub: `${intg.length} modules`, desc: "Code that talks to outside services.", files: intg, stats: [["modules", intg.length]], sections: [{ title: "Modules", rows: fileRows(intg) }, { title: "Most complex", rows: fnRows(intg) }] });
+    for (const n of ext.slice(0, 8)) add({ id: "x:" + n.id, tier: 4, icon: n.kind === "cloud" ? "cloud" : "globe", title: n.label, sub: n.kind === "cloud" ? "cloud platform" : "external service", desc: n.detail || "An outside service the system depends on.", files: n.sources || [], stats: [["kind", n.kind]], sections: [{ title: "Seen in", rows: fileRows((n.sources || []).filter((s) => files.some((f) => f.path === s))) }] });
+    if (ext.length > 8) add({ id: "x:more", tier: 4, icon: "globe", title: `+${ext.length - 8} more`, sub: "external services", desc: "More outside services.", files: [], stats: [["count", ext.length - 8]], sections: [{ title: "Services", rows: infraRows(ext.slice(8)) }] });
+    const plat = infra.filter((n) => !["db", "cache", "queue", "search", "external", "cloud", "app"].includes(n.kind));
+    for (const [kinds, id, ic, title, d] of [[["container"], "containers", "server", "Containers", "How the system is packaged and run."], [["ci"], "ci", "rotate", "CI / CD", "Automated build, test and deploy."], [["cdn", "function", "hosting"], "hosting", "cloud", "Hosting & functions", "Where it is deployed."]]) {
+      const ns = plat.filter((n) => kinds.includes(n.kind)); if (ns.length) add({ id, tier: 5, icon: ic, title, sub: ns.length + (ns.length === 1 ? " item" : " items"), desc: d, files: ns.flatMap((n) => n.sources || []), stats: [["items", ns.length]], sections: [{ title: "Found in", rows: infraRows(ns) }] });
+    }
+    const tests = byLayer.test || []; if (tests.length) add({ id: "tests", tier: 5, icon: "beaker", title: "Tests", sub: `${tests.length} files`, desc: "Automated checks.", files: tests, stats: [["files", tests.length]], sections: [{ title: "Files", rows: fileRows(tests) }] });
+    return comps;
+  }
+  async function systemView(v) {
+    const sc = el("div", "scroll sys"); v.append(sc);
+    let comps; try { comps = await buildSystem(); } catch (e) { sc.append(el("div", "empty", "The system picture is not available for this step.")); return; }
+    if (S.active !== "system") return;
+    S.sysComps = Object.fromEntries(comps.map((c) => [c.id, c]));
+    const { w, h, gx, gy, top, left } = SYS_NODE, main = [0, 1, 2, 3, 4].filter((t) => comps.some((c) => c.tier === t));
+    const TIER = ["Clients", "Interface", "Logic", "Data", "Outside"];
+    const col = Object.fromEntries(main.map((t, i) => [t, i])), pos = {};
+    let maxRows = 1; for (const t of main) { const cs = comps.filter((c) => c.tier === t); maxRows = Math.max(maxRows, cs.length); cs.forEach((c, i) => { pos[c.id] = { x: left + col[t] * (w + gx), y: top + i * (h + gy), c }; }); }
+    const plat = comps.filter((c) => c.tier === 5), W = Math.max(main.length * (w + gx) - gx + left * 2, plat.length * (w + 20) + left * 2, 480);
+    const platY = top + maxRows * (h + gy) + 44;
+    plat.forEach((c, i) => { pos[c.id] = { x: left + i * (w + 20), y: platY, c }; });
+    const H = plat.length ? platY + h + 28 : top + maxRows * (h + gy) + 10;
+    const svg = document.createElementNS(NS, "svg"); svg.setAttribute("class", "sysmap"); svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const mk = (tag, attrs, parent = svg) => { const n = document.createElementNS(NS, tag); for (const [k, val] of Object.entries(attrs || {})) n.setAttribute(k, val); parent.append(n); return n; };
+    const defs = mk("defs"), mark = mk("marker", { id: "sysarrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs); mk("path", { d: "M0 1 L9 5 L0 9z", class: "sysarrowhead" }, mark);
+    main.forEach((t, i) => { const lb = mk("text", { x: left + i * (w + gx), y: 30, class: "systier" }); lb.textContent = TIER[t].toUpperCase(); });
+    if (plat.length) { const lb = mk("text", { x: left, y: platY - 16, class: "systier" }); lb.textContent = "PLATFORM"; mk("line", { x1: left, x2: W - left, y1: platY - 30, y2: platY - 30, class: "sysrule" }); }
+    const link = (a, b) => { const p = pos[a], q = pos[b], x1 = p.x + w, y1 = p.y + h / 2, x2 = q.x, y2 = q.y + h / 2, mx = (x1 + x2) / 2; mk("path", { d: `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2 - 2} ${y2}`, class: "sysedge", "marker-end": "url(#sysarrow)" }); };
+    for (let i = 0; i < main.length - 1; i++) {
+      const A = comps.filter((c) => c.tier === main[i]), B = comps.filter((c) => c.tier === main[i + 1]);
+      if (A.length * B.length <= 12) for (const a of A) for (const b of B) link(a.id, b.id);
+      else { A.forEach((a, k) => link(a.id, B[Math.min(k, B.length - 1)].id)); B.forEach((b, k) => k >= A.length && link(A[A.length - 1].id, b.id)); }
+    }
+    for (const p of Object.values(pos)) {
+      const c = p.c, g = mk("g", { class: "sysnode" + (S.sel?.kind === "component" && S.sel.ref === c.id ? " on" : ""), transform: `translate(${p.x},${p.y})`, tabindex: 0, role: "button" });
+      mk("title", {}, g).textContent = c.desc;
+      mk("rect", { width: w, height: h, rx: 10, class: "sysbox" }, g);
+      mk("circle", { cx: 30, cy: h / 2, r: 18, class: "sysdisc" }, g);
+      const ic = mk("use", { href: "icons.svg#" + c.icon, x: 20, y: h / 2 - 10, width: 20, height: 20, class: "sysicon" }, g);
+      const t1 = mk("text", { x: 58, y: h / 2 - 3, class: "systitle" }, g); t1.textContent = c.title.length > 17 ? c.title.slice(0, 16) + "…" : c.title;
+      const t2 = mk("text", { x: 58, y: h / 2 + 15, class: "syssub" }, g); t2.textContent = (c.sub || "").length > 22 ? c.sub.slice(0, 21) + "…" : c.sub || "";
+      if (c.state) { mk("circle", { cx: w - 12, cy: 12, r: 5, class: "sysdot " + c.state }, g); mk("title", {}, g).textContent = c.state === "new" ? "new since the last step" : "changed since the last step"; }
+      const open = () => { select({ kind: "component", ref: c.id }); svg.querySelectorAll(".sysnode.on").forEach((n) => n.classList.remove("on")); g.classList.add("on"); };
+      g.addEventListener("click", open); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    }
+    sc.append(svg, el("div", "syshint", "Click a component to see what is inside it. Drawn from the code: layers, routes, tables and infrastructure."));
   }
 
   // ---- overview
@@ -761,6 +845,16 @@
       const acts = el("div", "actions"); const o = el("button", "btn sm primary", "Open"); o.onclick = () => openFile(sel.ref); acts.append(o);
       if (f.status === "M" || f.status === "A") { const d = el("button", "btn sm", "Diff"); const last = S.st.steps[S.st.steps.length - 1]; d.onclick = () => openDiff(sel.ref, last ? String(last.n) : "live", "live"); acts.append(d); }
       box.append(acts);
+    } else if (sel.kind === "component") {
+      const c = S.sysComps && S.sysComps[sel.ref]; if (!c) return;
+      box.append(el("h2", null, c.title), el("div", "sysdesc", c.desc));
+      const kv = el("dl", "kv"); for (const [k, val] of c.stats) kv.append(el("dt", null, k), el("dd", null, String(val))); box.append(kv);
+      for (const sec of c.sections) {
+        if (!sec.rows.length) continue;
+        box.append(el("div", "kind", sec.title));
+        for (const r of sec.rows.slice(0, 40)) { const row = el("div", "ev link"); row.append(el("span", null, r.label)); if (r.meta) row.append(el("span", "meta", r.meta)); row.onclick = r.run; box.append(row); }
+        if (sec.rows.length > 40) box.append(el("div", "empty", `+${sec.rows.length - 40} more`));
+      }
     } else if (sel.kind === "infra") {
       const n = S.st.infra.nodes.find((x) => x.id === sel.ref); if (!n) return;
       box.append(el("h2", null, n.label)); const kv = el("dl", "kv"); kv.append(el("dt", null, "kind"), el("dd", null, n.kind), el("dt", null, "detail"), el("dd", null, n.detail || "—"), el("dt", null, "found in"), el("dd", null, n.sources.join(", "))); box.append(kv);

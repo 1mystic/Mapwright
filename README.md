@@ -42,6 +42,7 @@ at any earlier step:
 
 | View | Shows | Built from |
 |---|---|---|
+| **System** | The whole system as one abstract, icon-based picture (clients → interface → logic → data → outside services, plus platform); click a component for what is inside it | layers, routes, tables, infrastructure |
 | **Overview** | Counts, what the agent just did, layers, mechanisms, entry points, infrastructure, hotspots, plan, verification | everything below |
 | **Architecture** | Modules grouped into layers (interface, services, data, integrations, UI …), imports, external packages | Python `ast`, JS/TS imports |
 | **Files** | How the project is organised, with added and changed files marked | the file tree |
