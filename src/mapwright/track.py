@@ -29,7 +29,8 @@ from pathlib import Path
 
 from . import analyze as A
 from . import concepts as C
-from . import config, infra
+from . import config, infra, noise, titles
+from . import ignore as ignore_mod
 from .redact import redact
 
 try:
@@ -40,6 +41,11 @@ except ImportError:  # Windows: in-process locking only
 SCHEMA = 5
 _KEY = re.compile(r"^[A-Za-z0-9_.-]{1,120}$")
 _LOCKS: dict[str, threading.RLock] = {}
+COALESCE_SECONDS = 2.0       # auto steps closer together than this are merged (the later turn end picks up the rest)
+SESSION_STALE_SECONDS = 600  # a session with no event for this long is not "in a turn" any more
+MAX_DEFER_SECONDS = 300      # how long a finished turn waits for other sessions still working
+JOURNAL_CAP_BYTES = 20 * 1024 * 1024  # past this, hook events (prompt/tool/turn_end) stop being journaled
+MAX_TOOL_EVENTS_PER_STEP = 500
 
 
 def project_key(root: str) -> str:
@@ -87,6 +93,7 @@ class Project:
         self.concepts: dict = {}
         self.infra: dict = {"nodes": [], "edges": []}
         self.truncated = False
+        self.truncated_info: dict | None = None
         self._journal_cache: tuple[int, list[dict]] = (-1, [])
         self._lock = _LOCKS.setdefault(self.key, threading.RLock())
         self._held = 0
@@ -178,8 +185,10 @@ class Project:
         """Re-read whatever changed on disk. Returns the paths whose content changed."""
         with self.locked():
             st = config.settings()
-            ignore = set(st.get("ignore") or [])
-            stats, self.truncated = A.scan(self.root) if not ignore else self._scan_ignoring(ignore)
+            matcher = ignore_mod.Matcher(self.root, st.get("ignore") or [], st.get("respect_gitignore", True))
+            info: dict = {}
+            stats, self.truncated = A.scan(self.root, matcher, st.get("max_files"), info)
+            self.truncated_info = info if self.truncated else None
             changed = []
             new_cache = {}
             for rel, sig in stats.items():
@@ -206,15 +215,6 @@ class Project:
             if not self.steps():
                 self._snapshot("baseline (before tracking started)", "", "baseline")
             return changed
-
-    def _scan_ignoring(self, ignore: set[str]):
-        saved = set(A.IGNORE_DIRS)
-        A.IGNORE_DIRS.update(ignore)
-        try:
-            return A.scan(self.root)
-        finally:
-            A.IGNORE_DIRS.clear()
-            A.IGNORE_DIRS.update(saved)
 
     def _analyze(self, rel: str, sig) -> dict:
         if A._secretish(rel):
@@ -354,30 +354,38 @@ class Project:
                     self.model = saved
         return self._rechecked[step["n"]]
 
-    def _snapshot(self, title: str, intent: str, source: str) -> dict:
+    def _snapshot(self, title: str, intent: str, source: str, prompt: str | None = None) -> dict:
         steps = self.steps()
         n = (steps[-1]["n"] + 1) if steps else 0
         prev = self.load_step(steps[-1]["n"]) if steps else None
-        changes = self.changes_between(prev["files"] if prev else {}, self.index) if prev else []
+        all_changes = self.changes_between(prev["files"] if prev else {}, self.index) if prev else []
+        real, noisy = noise.split(all_changes)
+        changes = real + noisy  # noisy ones stay tracked, flagged with `noise`
         marks = A.diff_models(prev["model"] if prev else None, self.model)
         delta = {k: dict(Counter(v.values())) for k, v in marks.items() if v}
-        check = self._title_check(title, changes, marks) if source == "agent" else "ok"
-        summary = {"files": len(changes), "added": sum(c.get("added", 0) for c in changes),
-                   "removed": sum(c.get("removed", 0) for c in changes), "delta": delta,
+        check = self._title_check(title, real, marks) if source == "agent" else "ok"
+        summary = {"files": len(real), "added": sum(c.get("added", 0) for c in real),
+                   "removed": sum(c.get("removed", 0) for c in real), "delta": delta,
                    "modules": len(self.model["modules"]), "functions": len(self.model["functions"]),
                    "classes": len(self.model["classes"]), "tables": len(self.model["tables"]), "routes": len(self.model["routes"])}
+        if noisy:
+            summary["noise"] = len(noisy)
         evs = self.journal()
         since = steps[-1]["id"] if steps else 0
         tools = Counter(e.get("tool") for e in evs if e["id"] > since and e["t"] == "tool")
-        prompt = next((e.get("text") for e in reversed(evs) if e["id"] > since and e["t"] == "prompt"), "")
+        if prompt is None:
+            prompt = next((e.get("text") for e in reversed(evs) if e["id"] > since and e["t"] == "prompt"), "")
         data = {"n": n, "title": title, "intent": intent, "source": source, "ts": time.time(), "files": dict(self.index),
                 "model": self.model, "changes": changes, "summary": summary, "marks": marks, "title_check": check,
                 "tools": dict(tools), "prompt": prompt}
         _gz_write(self.dir / "steps" / f"{n:04d}.json.gz", json.dumps(data, separators=(",", ":")).encode())
         self._step_cache[n] = data
+        keep = ("path", "kind", "added", "removed", "note")
+        logged = [{k: c[k] for k in keep if k in c} for c in real][:200]
+        if noisy:
+            logged.append({"path": noise.collapse_line(noisy), "kind": "noise", "noise": len(noisy)})
         self.append({"t": "step", "n": n, "title": title[:120], "intent": intent[:300], "source": source,
-                     "summary": summary, "title_check": check, "prompt": prompt[:200],
-                     "changes": [{k: c[k] for k in ("path", "kind", "added", "removed", "note") if k in c} for c in changes][:200]})
+                     "summary": summary, "title_check": check, "prompt": prompt[:200], "changes": logged})
         return data
 
     def step(self, title: str, intent: str = "", source: str = "agent") -> dict:
@@ -389,33 +397,75 @@ class Project:
             data = self._snapshot(title, " ".join((intent or "").split())[:300], source)
         return data
 
-    def maybe_auto_step(self) -> dict | None:
-        """Close a step by itself when the settings say so and something changed."""
+    def _sessions(self, evs: list[dict], since: int) -> dict[str, dict]:
+        """Per session since the last step: id/ts of its last activity (prompt or tool) and last turn end."""
+        out: dict[str, dict] = {}
+        for e in evs:
+            if e["id"] <= since or e["t"] not in ("prompt", "tool", "turn_end"):
+                continue
+            st = out.setdefault(str(e.get("session") or ""), {"act": 0, "act_ts": 0.0, "end": 0, "end_ts": 0.0})
+            if e["t"] == "turn_end":
+                st["end"], st["end_ts"] = e["id"], e["ts"]
+            else:
+                st["act"], st["act_ts"] = e["id"], e["ts"]
+        return out
+
+    def _turn_prompt(self, evs: list[dict], since: int, session: str | None) -> str:
+        """The prompt that drove this turn: the first substantive one from the ending session (any session
+        if it has none), not simply the latest one, which is often 'ok' or a follow-up."""
+        prompts = [e for e in evs if e["id"] > since and e["t"] == "prompt" and e.get("text")]
+        mine = [e for e in prompts if session is None or str(e.get("session") or "") == session] or prompts
+        for e in mine:
+            if titles.prompt_title(e["text"]):
+                return e["text"]
+        return mine[0]["text"] if mine else ""
+
+    def maybe_auto_step(self, session: str | None = None, final: bool = False) -> dict | None:
+        """Close a step by itself when the settings say so and something meaningful changed.
+
+        Never creates an empty step, nor one for noise-only changes (lockfiles, build output, ...). In
+        `turn` mode a step closes only when a session's turn has ended and no other session is mid-turn
+        (for at most MAX_DEFER_SECONDS), and not within COALESCE_SECONDS of the previous step, so a burst
+        of turn ends (one per subagent) makes one step. `final` (session end) skips the waiting."""
         mode = config.settings()["auto_step"]
         if mode == "off":
             return None
         with self.locked():
             self.refresh()
             pend = self.pending(counts=False)
-            if not pend:
+            if not pend or not noise.split(pend)[0]:
                 return None
             evs = self.journal()
             steps = self.steps()
             since = steps[-1]["id"] if steps else 0
-            turn_end = any(e["t"] == "turn_end" and e["id"] > since for e in evs)
-            if mode == "turn" and not turn_end:
-                if not any(e["t"] in ("tool", "prompt") and e["id"] > since for e in evs):
-                    mode = "idle"  # no hooks: fall back to quiet-period steps
-                else:
-                    return None
-            if mode == "idle" and not turn_end:
+            now = time.time()
+            sess = self._sessions(evs, since)
+            ended = {k: v for k, v in sess.items() if v["end"] > v["act"]}
+            if not final and steps and steps[-1].get("source") == "auto" and now - steps[-1].get("ts", 0) < COALESCE_SECONDS:
+                return None
+            if mode == "turn" and not ended:
+                if sess:
+                    return None  # a turn is in progress
+                mode = "idle"    # no hooks: fall back to quiet-period steps
+            if mode == "turn" and not final:
+                busy = [v for v in sess.values() if v["act"] > v["end"] and now - v["act_ts"] < SESSION_STALE_SECONDS]
+                if busy and now - max(v["end_ts"] for v in ended.values()) < MAX_DEFER_SECONDS:
+                    return None  # another session is still working
+            if mode == "idle" and not ended:
                 last = config.read_json(self.dir / "meta.json", {}).get("last_change", 0)
                 if time.time() - last < config.settings()["idle_seconds"]:
                     return None
-            prompt = next((e.get("text") for e in reversed(evs) if e["id"] > since and e["t"] == "prompt"), "")
-            files = [c["path"] for c in pend]
-            title = (prompt[:100] if prompt else f"changed {len(files)} file{'s' if len(files) != 1 else ''}: " + ", ".join(os.path.basename(f) for f in files[:3]))
-            return self._snapshot(title, "", "auto")
+            if session is None and ended:
+                session = max(ended, key=lambda k: ended[k]["end"])
+            prompt = self._turn_prompt(evs, since, session)
+            real = noise.split(pend)[0]
+            new_syms = []
+            if self.model:
+                prev = self.load_step(steps[-1]["n"]) if steps else None
+                marks = A.diff_models(prev["model"] if prev else None, self.model)
+                new_syms = [k.split(":")[-1].split(".")[-1] for kind in ("functions", "classes") for k, v in (marks.get(kind) or {}).items() if v == "new"][:3]
+            title = titles.derive_title(prompt, real, new_syms)
+            return self._snapshot(title, prompt[:300], "auto", prompt=prompt)
 
     # ------------------------------------------------------------------ annotations
     def annotations(self) -> dict:
@@ -558,9 +608,31 @@ class Project:
         return next(x for x in self.verify()["links"] if x["id"] == ev["id"])
 
     def record(self, kind: str, **data) -> dict:
-        """Prompts, tool calls and turn ends reported by hooks or plugins. Text is redacted."""
+        """Prompts, tool calls and turn ends reported by hooks or plugins. Text is redacted. Hook events
+        are dropped (returns {}) when the journal is past its size cap, when a tool event repeats the
+        previous one without adding information, or when too many tool events piled up since the last step."""
         if kind == "prompt":
             data["text"] = redact(" ".join(str(data.get("text", "")).split()))[:300]
+        if data.get("session") is not None:
+            data["session"] = str(data["session"])[:64]
+        if kind in ("prompt", "tool", "turn_end"):
+            with self.locked():
+                try:
+                    if (self.dir / "journal.jsonl").stat().st_size > JOURNAL_CAP_BYTES:
+                        return {}
+                except OSError:
+                    pass
+                if kind == "tool":
+                    evs = self.journal()
+                    last = evs[-1] if evs else {}
+                    if (last.get("t") == "tool" and last.get("tool") == data.get("tool") and not data.get("files")
+                            and not last.get("files") and last.get("session") == data.get("session")):
+                        return {}
+                    steps = self.steps()
+                    since = steps[-1]["id"] if steps else 0
+                    if sum(1 for e in evs if e["id"] > since and e["t"] == "tool") >= MAX_TOOL_EVENTS_PER_STEP:
+                        return {}
+                return self.append({"t": kind, **data})
         return self.append({"t": kind, **data})
 
     # ------------------------------------------------------------------ views
@@ -590,6 +662,7 @@ class Project:
         evs = self.journal()
         return {
             "key": self.key, "name": self.name, "root": self.root, "version": self.version, "truncated": self.truncated,
+            "truncated_info": self.truncated_info,
             "steps": [{**{k: s.get(k) for k in ("n", "title", "intent", "source", "ts", "summary", "changes", "prompt")}, "title_check": self.title_check(s)}
                       for s in steps],
             "pending": self.pending(),

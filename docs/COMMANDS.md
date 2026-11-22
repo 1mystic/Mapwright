@@ -7,7 +7,8 @@ current folder (or `--path DIR`).
 
 | Command | What it does |
 |---|---|
-| `mapwright init [--connect AGENT] [--agents-md [FILE]]` | Track this project; the current state becomes step 0 |
+| `mapwright init [--connect AGENT] [--agents-md [FILE]] [--local \| --home DIR] [--apply-ignore]` | Track this project; the current state becomes step 0. Warns when `max_files` truncates the scan and suggests ignores for bulky generated/data folders (`--apply-ignore` saves them) |
+| `mapwright init --local` / `--home DIR` | Keep this project's history in `<project>/.mapwright` (or DIR, relative to the project root) instead of `~/.mapwright`. Creates it with mode 0700, writes the marker `.mapwright/home.json`, adds it to `.gitignore`. With `--connect X` the MCP entry gets `env.MAPWRIGHT_HOME` and Claude Code hooks are prefixed with `MAPWRIGHT_HOME=…` |
 | `mapwright open [--print] [--json]` | Open the map in the browser (starts the daemon if needed) |
 | `mapwright up [-d] [--no-watch]` · `mapwright down` | Start (foreground or background) or stop the daemon |
 | `mapwright watch` | Track from the files alone, without the daemon or any agent integration |
@@ -21,7 +22,7 @@ current folder (or `--path DIR`).
 | `mapwright connect --list` | Agents found on this machine and what is connected |
 | `mapwright connect AGENT [--scope project\|user]` | Write the agent's MCP config (and hooks for Claude Code) |
 | `mapwright connect --print AGENT` | Print the config to paste by hand |
-| `mapwright disconnect AGENT [--scope …]` | Remove it again |
+| `mapwright disconnect AGENT [--scope …]` | Remove it again; config files (and empty `.claude/`, `.cursor/`, `.vscode/`, `.gemini/` folders) that are left with nothing in them are deleted |
 | `mapwright agents-md [--file AGENTS.md\|CLAUDE.md\|GEMINI.md\|.cursorrules]` | Add six lines of usage notes for agents |
 | `mapwright mcp [--root DIR]` | The MCP server on stdio (agents start this) |
 | `mapwright hook AGENT` | Hook entry point (agents call this with JSON on stdin) |
@@ -68,12 +69,16 @@ print-only: `cline`, `zed`, `jetbrains`, `any`.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `auto_step` | `turn` | `turn`: close a step at each agent turn end (hooks) · `idle`: after a quiet period · `off` |
+| `auto_step` | `turn` | `turn`: close a step when an agent turn ends (Claude Code Stop/SessionEnd hooks). Waits while another session in the project is mid-turn (up to 5 min), ignores subagent stops and re-fired Stop hooks, merges turn ends within 2 s, and creates no step for turns with no file changes or only generated/lockfile changes (lockfiles, build output, minified/map files, shards, large data JSON, tool config, ignored files); those are still recorded, collapsed into one `generated/lockfile (N files)` line, and not counted. Titles come from the first clear sentence of the prompt (≤ ~60 chars) or are computed from the changes for long prompts; the prompt is kept (redacted) as the intent · `idle`: after a quiet period · `off` |
 | `idle_seconds` | `60` | Quiet period for `idle` (and for agents without hooks) |
 | `watch_interval` | `2.0` | Seconds between scans while the daemon runs |
 | `brief_budget` | `2400` | Characters in `map` / `brief` (about 600 tokens) |
-| `max_files` · `ignore` | `5000` · `[]` | Size cap and extra folders to skip |
+| `max_files` | `5000` | Cap on tracked files. When hit, `init`, `doctor` and `state` (`truncated_info`) show files seen and the folders that used the budget |
+| `respect_gitignore` | `true` | Skip files matched by `.gitignore` (root and nested) and `.git/info/exclude` |
+| `ignore` | `[]` | Extra names or gitignore-style patterns, e.g. `["public/question-bank/**", "*.pdf", "apps/*/dist"]`. Plain names match at any depth; `!pattern` re-includes something `.gitignore` excludes |
 | `redact` | `true` | Redact secrets in code shown in the UI |
 | `theme` · `font_size` | `dark` · `13` | Appearance |
+
+Home resolution: `MAPWRIGHT_HOME` env, then a project-local home found by walking up from the current directory (or `--path`, `--root`, or the hook's cwd) to a `.mapwright/home.json` marker, then `~/.mapwright`. One daemon serves one home, so `open`/`up` start it with the project's home and refuse (with a message) if a daemon with a different home holds the port.
 
 Environment: `MAPWRIGHT_HOME` (default `~/.mapwright`), `MAPWRIGHT_PORT` (default `7979`), `MAPWRIGHT_ROOT` (project for `mcp`).

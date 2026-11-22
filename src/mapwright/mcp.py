@@ -132,6 +132,8 @@ def serve(root: str | None = None, stdin=None, stdout=None) -> int:
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
     root = root or os.environ.get("MAPWRIGHT_ROOT") or os.getcwd()
+    from . import config
+    config.set_start(root)
     project = open_project(root)
     for line in stdin:
         line = line.strip()

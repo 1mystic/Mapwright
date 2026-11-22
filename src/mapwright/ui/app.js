@@ -23,7 +23,13 @@
   const params = new URLSearchParams(location.hash.slice(1));
   const DEMO = new URLSearchParams(location.search).has("demo") || document.documentElement.dataset.demo === "1";
   let token = params.get("t");
-  if (token) { try { sessionStorage.setItem("mw.t", token); } catch (e) {} } else { try { token = sessionStorage.getItem("mw.t"); } catch (e) {} }
+  const TOKEN_RE = /^[A-Za-z0-9._~+\-]{8,}$/;
+  const tokenStore = {
+    load() { for (const st of [() => sessionStorage, () => localStorage]) { try { const v = st().getItem("mw.t"); if (v) return v; } catch (e) {} } return null; },
+    save(t) { for (const st of [() => sessionStorage, () => localStorage]) { try { st().setItem("mw.t", t); } catch (e) {} } },
+    clear() { for (const st of [() => sessionStorage, () => localStorage]) { try { st().removeItem("mw.t"); } catch (e) {} } },
+  };
+  if (token) tokenStore.save(token); else token = tokenStore.load();
   if (params.get("t")) history.replaceState(null, "", location.pathname + location.search + (params.get("p") ? "#p=" + params.get("p") : ""));
   let bundle = null;
 
@@ -36,9 +42,12 @@
       if (k && /\/(version|state|settings|projects|integrations|catalog)$/.test(path.split("?")[0])) return bundle[k];
       throw new Error("not in demo");
     }
-    const r = await fetch(path, { method: method || (body !== undefined ? "POST" : "GET"), cache: "no-store",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
+    let r;
+    try { r = await fetch(path, { method: method || (body !== undefined ? "POST" : "GET"), cache: "no-store",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined }); }
+    catch (e) { throw Object.assign(new Error("daemon not reachable"), { network: true }); }
     const data = await r.json().catch(() => ({}));
+    if (r.ok && token) tokenStore.save(token);
     if (!r.ok) throw Object.assign(new Error(data.error || String(r.status)), { status: r.status });
     return data;
   }
@@ -87,14 +96,14 @@
   async function boot() {
     setTheme(store.get("theme", "dark"));
     wire();
-    if (!DEMO && !token) { S.conn = "offline"; renderAll(); welcome("This page needs the link `mapwright open` prints (it carries a local token)."); return; }
+    if (!DEMO && !token) { S.conn = "token"; renderAll(); authBox("missing"); return; }
     try {
       const pr = await api("/v1/projects");
       S.projects = pr.projects.filter((p) => p.exists);
       if (!S.projects.some((p) => p.key === S.key)) S.key = S.projects[0]?.key || null;
       S.conn = DEMO ? "demo" : "live";
       api("/v1/settings").then((s) => { S.settings = s; if (!store.get("theme", null) && s.settings.theme) setTheme(s.settings.theme); }).catch(() => {});
-    } catch (e) { S.conn = e.status === 401 ? "token" : "offline"; renderAll(); welcome(e.status === 401 ? "The token in this link is not valid any more. Run `mapwright open` again." : "Mapwright is not running. Start it with `mapwright up -d`."); return; }
+    } catch (e) { S.conn = e.status === 401 ? "token" : "offline"; renderAll(); if (e.status === 401) authBox("rejected"); else offlineBox(); return; }
     if (!S.key) { renderAll(); welcome(); return; }
     await load(true);
     setInterval(poll, 1500);
@@ -105,7 +114,42 @@
       const v = await api(P("version"));
       if (S.conn !== "live" && !DEMO) { S.conn = "live"; renderStatus(); }
       if (v.version !== S.version || v.journal !== S.journal) { S.journal = v.journal; await load(false); }
-    } catch (e) { if (!DEMO) { S.conn = "offline"; renderStatus(); } }
+    } catch (e) { if (!DEMO) { if (e.status === 401) { S.conn = "token"; S.st = null; renderAll(); authBox("rejected"); } else { S.conn = "offline"; renderStatus(); } } }
+  }
+  // ---- first-run / unauthorised / offline states (the token is never written into the DOM)
+  function parseToken(text) {
+    const raw = String(text || "").trim(); if (!raw) return null;
+    let t = null, p = null;
+    const h = raw.includes("#") ? raw.slice(raw.indexOf("#") + 1) : raw.includes("t=") ? raw : "";
+    if (h) { const q = new URLSearchParams(h); t = q.get("t"); p = q.get("p"); }
+    if (!t && !h) t = raw;
+    return t && TOKEN_RE.test(t) ? { t, p } : null;
+  }
+  function forgetToken() { tokenStore.clear(); token = null; S.conn = "token"; S.st = null; S.projects = []; toast("ok", "Token forgotten", "Run `mapwright open` to sign in again."); closeMenus(); renderAll(); authBox("missing"); }
+  function stateBox(id, title, paras, cmd) {
+    const v = $("#view"); v.replaceChildren();
+    const w = el("div", "welcome"), b = el("div", "box"); b.id = id; b.dataset.testid = id;
+    const h = el("h1"); const img = el("img"); img.src = "mark.svg"; img.width = 34; img.alt = ""; h.append(img, document.createTextNode(title));
+    b.append(h); paras.forEach((t) => b.append(el("p", null, t)));
+    if (cmd) { const c = el("div", "cmd"); c.append(el("code", null, cmd)); const cp = el("button", "btn sm", "Copy"); cp.onclick = () => { navigator.clipboard?.writeText(cmd); toast("ok", "Copied", cmd); }; c.append(cp); b.append(c); }
+    w.append(b); v.append(w); return b;
+  }
+  function authBox(why) {
+    const b = stateBox("auth-box", "Unauthorised", [why === "rejected" ? "The saved token is not valid any more (the daemon was probably reset)." : "This page needs a local access token, which comes with the link that `mapwright open` prints.",
+      "Run this in a terminal to open Mapwright with the right link:"], "mapwright open");
+    b.append(el("p", null, "Or paste that link (it ends in #p=…&t=…) or just the token here:"));
+    const row = el("div", "actions"); const inp = el("input", "input"); inp.id = "auth-input"; inp.type = "password"; inp.autocomplete = "off"; inp.spellcheck = false; inp.placeholder = "Link or token"; inp.style.flex = "1";
+    const go = el("button", "btn primary", "Use token"); go.id = "auth-go";
+    const apply = () => { const r = parseToken(inp.value); if (!r) { toast("err", "That does not look like a link or token", "Paste the full link from `mapwright open`."); return; }
+      tokenStore.save(r.t); if (r.p) store.set("key", r.p); inp.value = ""; location.hash = ""; location.reload(); };
+    go.onclick = apply; inp.onkeydown = (e) => { if (e.key === "Enter") apply(); };
+    row.append(inp, go); b.append(row);
+    if (token) { const f = el("button", "btn sm", "Forget saved token"); f.id = "auth-forget"; f.onclick = forgetToken; b.append(Object.assign(el("div", "actions"), {})); b.lastChild.append(f); }
+    setTimeout(() => inp.focus(), 0);
+  }
+  function offlineBox() {
+    const b = stateBox("offline-box", "Mapwright is not running", ["The local daemon did not answer on this address. Start it in a terminal:"], "mapwright up -d");
+    const row = el("div", "actions"); const r = el("button", "btn primary", "Retry"); r.id = "offline-retry"; r.onclick = () => location.reload(); row.append(r); b.append(row);
   }
   async function load(first) {
     const [st, integ] = await Promise.all([api(P("state")), first || !S.integ ? api(url("/v1/integrations", { key: S.key })).catch(() => null) : Promise.resolve(S.integ)]);
@@ -134,6 +178,9 @@
   }
   function renderToolbar() {
     const p = S.projects.find((x) => x.key === S.key);
+    const gated = !DEMO && (S.conn === "token" || S.conn === "offline") && !S.st;
+    for (const id of ["w-project", "w-step", "w-step-add", "w-agents", "w-search"]) { const n = $("#" + id); n.disabled = gated; n.classList.toggle("gated", gated); n.setAttribute("aria-disabled", gated); }
+    if (gated) { $("#w-project-name").textContent = "—"; $("#w-project").title = ""; $("#w-step-badge").textContent = "—"; $("#w-step").classList.remove("live"); $("#w-step-name").textContent = ""; $("#w-agents-dot").className = "ldot"; $("#w-agents-txt").textContent = S.conn === "token" ? "signed out" : "offline"; return; }
     $("#w-project-name").textContent = p ? p.name : "No project";
     $("#w-project").title = p ? p.root : "Choose a project";
     const live = S.step === "live", st = S.st;
@@ -771,7 +818,7 @@
       if (S.brief) { const b = el("span", "it", `brief ≈ ${S.brief.tokens} tokens`); b.title = "Size of the map an agent reads instead of exploring the code"; s.append(b); }
       const st = el("span", "it", S.step === "live" ? `live · ${S.st.steps.length} steps` : `viewing step ${S.step}`); s.append(st);
     }
-    const c = el("span", "it"); const dot = el("span", "ldot " + (S.conn === "live" ? "on" : S.conn === "demo" ? "" : "off")); c.append(dot, document.createTextNode({ live: "connected", demo: "demo data", offline: "daemon offline", token: "token rejected", connecting: "connecting…" }[S.conn] || S.conn)); s.append(c);
+    const c = el("span", "it"); const dot = el("span", "ldot " + (S.conn === "live" ? "on" : S.conn === "demo" ? "" : "off")); c.append(dot, document.createTextNode({ live: "connected", demo: "demo data", offline: "daemon offline", token: "unauthorised", connecting: "connecting…" }[S.conn] || S.conn)); s.append(c);
   }
 
   // ------------------------------------------------------------------ actions, menus, palette, settings, toasts
@@ -792,6 +839,7 @@
   }
   function closeMenus() { document.querySelectorAll("[data-menu]").forEach((x) => x.remove()); }
   async function palette() {
+    if (!DEMO && !S.st) return;
     closeMenus(); const scrim = el("div", "scrim"); const p = el("div", "palette"); scrim.dataset.menu = p.dataset.menu = "1";
     const head = el("div", "ph"); head.append(icon("search")); const inp = el("input"); inp.placeholder = "Search files, symbols, views and actions"; head.append(inp); const res = el("div", "pr"); p.append(head, res);
     document.body.append(scrim, p); scrim.onclick = closeMenus; inp.focus();
@@ -835,7 +883,7 @@
       Analysis: () => { const i = el("input", "input"); i.value = (s.ignore || []).join(", "); i.oninput = () => { s.ignore = i.value.split(",").map((x) => x.trim()).filter(Boolean); }; return [field("Folders to skip", i, "Names, comma-separated. node_modules, .venv, dist, build and similar are always skipped."), field("Maximum files", num("max_files", 100, 50000))]; },
       Agents: () => [field("Brief size (characters)", num("brief_budget", 400, 20000, 100), "About four characters per token. 2400 ≈ 600 tokens."), field("Redact secrets in code views", tog("redact"))],
       Integrations: () => { const b = el("button", "btn", "Open Connect an agent"); b.onclick = () => { closeMenus(); openTab({ id: "setup", title: "Connect an agent", icon: "plug" }); }; return [el("p", null, "Connect Claude Code, Cursor, VS Code, Windsurf, opencode, Codex, Gemini CLI and others."), Object.assign(el("div"), { style: "margin-top:12px" }), b]; },
-      About: () => { const kv = el("dl", "kv"); [["Version", data.version], ["Data folder", data.home || "—"], ["Port", data.port || "—"], ["Mode", DEMO ? "demo (read-only)" : "local daemon"]].forEach(([k, v]) => kv.append(el("dt", null, k), el("dd", "mono", String(v)))); return [kv, Object.assign(el("p"), { textContent: "Everything stays on this machine. Nothing is sent anywhere.", style: "margin-top:14px;color:var(--muted)" })]; },
+      About: () => { const kv = el("dl", "kv"); [["Version", data.version], ["Data folder", data.home || "—"], ["Port", data.port || "—"], ["Mode", DEMO ? "demo (read-only)" : "local daemon"]].forEach(([k, v]) => kv.append(el("dt", null, k), el("dd", "mono", String(v)))); return [kv, Object.assign(el("p"), { textContent: "Everything stays on this machine. Nothing is sent anywhere.", style: "margin-top:14px;color:var(--muted)" }), ...(DEMO ? [] : [Object.assign(el("p"), { textContent: "The access token is kept in this browser so you do not need the link every time.", style: "margin-top:14px;color:var(--muted)" }), Object.assign(el("button", "btn", "Forget token"), { id: "forget-token", onclick: forgetToken })])]; },
     };
     let cur = "Appearance";
     const show = () => { nav.replaceChildren(); for (const k of Object.keys(pages)) { const r = el("div", "row" + (k === cur ? " sel" : ""), k); r.onclick = () => { cur = k; show(); }; nav.append(r); } pane.replaceChildren(el("h3", null, cur), ...pages[cur]()); };

@@ -16,14 +16,64 @@ DEFAULTS = {
     "watch_interval": 2.0,        # seconds between scans of tracked projects while the daemon runs
     "brief_budget": 2400,         # characters in `map` / `brief` (about 600 tokens)
     "max_files": 5000,
-    "ignore": [],                 # extra directory names to skip
+    "ignore": [],                 # extra names or gitignore-style patterns to skip (e.g. "public/bank/**", "*.pdf")
+    "respect_gitignore": True,    # also skip what .gitignore / .git/info/exclude ignore
     "redact": True,
     "keep_blobs_days": 0,         # 0 = keep every file version
 }
 
 
+_START: str | None = None          # where project-local discovery starts (default: the current directory)
+_CACHE: dict[tuple, Path] = {}
+MARKER_DIR = ".mapwright"
+MARKER = "home.json"
+
+
+def set_start(path: str | os.PathLike | None) -> None:
+    """Start project-local home discovery from this directory (a --path / --root / hook cwd) instead of the cwd."""
+    global _START
+    _START = os.path.abspath(os.fspath(path)) if path else None
+
+
+def reset_cache() -> None:
+    _CACHE.clear()
+
+
+def local_home(start: str | os.PathLike | None = None) -> Path | None:
+    """The project-local home found by walking up from start (default cwd) for .mapwright/home.json, or None."""
+    try:
+        cur = Path(os.path.abspath(os.fspath(start) if start else (_START or os.getcwd())))
+    except OSError:
+        return None
+    user_home = Path.home()
+    for d in [cur, *cur.parents]:
+        if d == user_home:
+            break  # ~/.mapwright is the default home, not a project marker
+        marker = d / MARKER_DIR / MARKER
+        if marker.is_file():
+            data = read_json(marker, {})
+            h = data.get("home") if isinstance(data, dict) else None
+            if isinstance(h, str) and os.path.isabs(h):
+                return Path(h)
+            return None
+    return None
+
+
+def write_marker(root: str, home_dir: str) -> Path:
+    """Record home_dir as the home for the project at root (<root>/.mapwright/home.json)."""
+    m = Path(root) / MARKER_DIR / MARKER
+    write_json(m, {"home": home_dir})
+    reset_cache()
+    return m
+
+
 def home() -> Path:
-    p = Path(os.environ.get("MAPWRIGHT_HOME", Path.home() / ".mapwright"))
+    env = os.environ.get("MAPWRIGHT_HOME")
+    key = (env, _START or os.getcwd())
+    p = _CACHE.get(key)
+    if p is None:
+        p = Path(env) if env else (local_home() or Path.home() / ".mapwright")
+        _CACHE[key] = p
     p.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         if p.stat().st_mode & 0o077:
@@ -111,7 +161,7 @@ def save_settings(changes: dict) -> dict:
             ok = isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
             v = type(want)(v) if ok else v
         elif isinstance(want, list):
-            ok = isinstance(v, list) and all(isinstance(x, str) and x and "/" not in x for x in v)
+            ok = isinstance(v, list) and all(isinstance(x, str) and x.strip() and "\n" not in x for x in v)
         else:
             ok = isinstance(v, str)
         if k == "theme" and v not in ("dark", "light"):

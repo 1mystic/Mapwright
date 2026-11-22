@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -38,6 +39,33 @@ def api(method: str, path: str, body=None, timeout: float = 2.0):
         return json.loads(r.read() or b"{}")
 
 
+def daemon_state() -> str:
+    """none: nothing on the port · ours: a daemon with this home · other: something else (a daemon with another home) holds the port."""
+    try:
+        r = api("GET", "/v1/ping", timeout=0.6)
+        if r.get("ok"):
+            h = r.get("home")
+            return "ours" if not h or os.path.realpath(h) == os.path.realpath(str(config.home())) else "other"
+    except (urllib.error.URLError, OSError, ValueError):
+        pass
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", config.port()), timeout=0.3):
+            return "other"
+    except OSError:
+        return "none"
+
+
+def _other_daemon_msg() -> str:
+    return (f"another process (probably a daemon with a different MAPWRIGHT_HOME) already listens on {config.base_url()}; "
+            f"this project's home is {config.home()}. One daemon serves one home: stop it (`mapwright down` with its home) "
+            f"or set MAPWRIGHT_PORT to another port.")
+
+
+def _daemon_env() -> dict:
+    return dict(os.environ, MAPWRIGHT_HOME=str(config.home()))
+
+
 def alive() -> bool:
     try:
         return bool(api("GET", "/v1/ping", timeout=0.6).get("ok"))
@@ -46,12 +74,83 @@ def alive() -> bool:
 
 
 # ------------------------------------------------------------------ commands
+def _gitignore_add(root: str, entries: list[str]) -> None:
+    path = os.path.join(root, ".gitignore")
+    try:
+        text = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+    except OSError:
+        return
+    have = {ln.strip().strip("/") for ln in text.splitlines()}
+    add = [e for e in entries if e.strip("/") not in have]
+    if add:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(add) + "\n")
+
+
+def _setup_local_home(a) -> str | None:
+    """init --local / --home DIR: create the home (0700), write the discovery marker, ignore it in version control, use it from here on."""
+    if a.local and a.home:
+        raise ValueError("use either --local or --home DIR, not both")
+    if not (a.local or a.home):
+        return None
+    root = os.path.realpath(A.find_root(os.path.abspath(getattr(a, "path", None) or os.getcwd())))
+    target = os.path.join(root, config.MARKER_DIR) if a.local else os.path.abspath(os.path.join(root, os.path.expanduser(a.home)))
+    os.makedirs(target, mode=0o700, exist_ok=True)
+    os.chmod(target, 0o700)
+    config.write_marker(root, target)
+    os.environ["MAPWRIGHT_HOME"] = target
+    config.reset_cache()
+    entries = [config.MARKER_DIR + "/"]
+    rel = os.path.relpath(target, root)
+    if not rel.startswith("..") and rel != config.MARKER_DIR:
+        entries.append(rel.replace(os.sep, "/") + "/")
+        if os.sep not in rel and rel not in A.IGNORE_DIRS:  # the tracker must not scan its own home
+            ign = config.settings()["ignore"]
+            if rel not in ign:
+                config.save_settings({"ignore": [*ign, rel]})
+    _gitignore_add(root, entries)
+    return target
+
+
+def _truncation_warning(p):
+    info = p.truncated_info
+    if not (p.truncated and info):
+        return
+    top = ", ".join(f"{t['dir']} ({t['files']})" for t in info["top"][:3])
+    print(c(f"  ! file cap reached: {info['seen']} candidate files, tracking the first {info['cap']} (largest: {top})", AMBER))
+    print(c("    raise max_files, or skip bulky folders: mapwright settings ignore '[\"path/\"]'", AMBER))
+
+
+def _ignore_suggestions(p, apply: bool):
+    from . import ignore as I
+    st = config.settings()
+    sug = I.suggest_ignores(I.survey(p.root, I.Matcher(p.root, st["ignore"], st["respect_gitignore"])))
+    sug = [x for x in sug if x["pattern"] not in st["ignore"]]
+    if not sug:
+        return
+    print(c("  ! bulky generated/data folders are being scanned:", AMBER))
+    for x in sug[:8]:
+        print(f"      {x['pattern']:<32} {x['reason']}")
+    pats = st["ignore"] + [x["pattern"] for x in sug]
+    if apply:
+        config.save_settings({"ignore": pats})
+        p.refresh()
+        print(f"  {c('✓', GREEN)} added {len(sug)} pattern(s) to the ignore setting · now {len(p.cache)} files tracked")
+    else:
+        print(f"    skip them: {c('mapwright settings ignore ' + shlex.quote(json.dumps(pats)), BLUE)}   (or re-run init with --apply-ignore)")
+
+
 def cmd_init(a):
+    local = _setup_local_home(a)
     p = project(a)
+    if local:
+        print(f"  {c('✓', GREEN)} project-local home {c(local, DIM)} (found automatically from this project)")
     print(f"{c('◆', BLUE)} tracking {c(p.name, BOLD)}  {c(p.root, DIM)}")
     print(f"  {len(p.cache)} files · {len(p.model['modules'])} modules · {len(p.model['functions'])} functions · baseline recorded as step 0")
+    _truncation_warning(p)
+    _ignore_suggestions(p, getattr(a, "apply_ignore", False))
     for t in a.connect or []:
-        files = connect.install(t, a.scope, p.root)
+        files = connect.install(t, a.scope, p.root, home=str(local or config.local_home(p.root) or "") or None)
         print(f"  {c('✓', GREEN)} connected {connect.TARGETS[t]['title']}: {', '.join(files)}")
     if a.agents_md:
         print(f"  {c('✓', GREEN)} wrote {connect.write_agents_md(p.root, a.agents_md)}")
@@ -59,13 +158,17 @@ def cmd_init(a):
 
 
 def cmd_up(a):
-    if alive():
+    st = daemon_state()
+    if st == "ours":
         print(f"{c('●', GREEN)} already running on {config.base_url()}")
         return
+    if st == "other":
+        print(c(f"✖ {_other_daemon_msg()}", RED))
+        sys.exit(1)
     if a.detach:
         log = open(config.home() / "daemon.log", "a")
         args = [sys.executable, "-m", "mapwright", "up"] + (["--no-watch"] if a.no_watch else [])
-        subprocess.Popen(args, stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True)
+        subprocess.Popen(args, stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True, env=_daemon_env())
         for _ in range(50):
             time.sleep(0.1)
             if alive():
@@ -74,6 +177,7 @@ def cmd_up(a):
         print(c(f"✖ did not start; see {config.home() / 'daemon.log'}", RED))
         sys.exit(1)
     from .server import Daemon
+    os.environ["MAPWRIGHT_HOME"] = str(config.home())  # pin: the daemon serves one home whatever its cwd
     try:
         d = Daemon(watch=not a.no_watch)
     except OSError as e:
@@ -99,8 +203,12 @@ def cmd_down(a):
 
 def cmd_open(a):
     p = project(a)
-    if not alive():
-        subprocess.run([sys.executable, "-m", "mapwright", "up", "-d"], stdout=subprocess.DEVNULL, check=False)
+    st = daemon_state()
+    if st == "other":
+        print(c(f"✖ {_other_daemon_msg()}", RED), file=sys.stderr)
+        sys.exit(1)
+    if st == "none":
+        subprocess.run([sys.executable, "-m", "mapwright", "up", "-d"], stdout=subprocess.DEVNULL, check=False, env=_daemon_env())
     url = f"{config.base_url()}/#p={p.key}&t={config.token()}"
     if a.json:
         print(json.dumps({"url": url, "key": p.key, "root": p.root}))
@@ -263,11 +371,11 @@ def cmd_connect(a):
         print(c("\n  mapwright connect <id> [--scope project|user]   ·   --print <id> shows the config to paste", DIM))
         return
     if a.print:
-        print(connect.snippet(a.target, root))
+        print(connect.snippet(a.target, root, home=str(config.local_home(root) or "") or None))
         if a.target in connect.MANUAL:
             print(c("\n" + connect.MANUAL[a.target][1], DIM))
         return
-    files = connect.install(a.target, a.scope, root)
+    files = connect.install(a.target, a.scope, root, home=str(config.local_home(root) or "") or None)
     print(f"{c('✓', GREEN)} {connect.TARGETS[a.target]['title']} connected ({a.scope}): " + ", ".join(files))
     print(c("  restart the agent (or start a new session) so it loads the MCP server", DIM))
 
@@ -336,6 +444,7 @@ def cmd_doctor(a):
     print(f"  {'✓' if alive() else '!'} daemon " + ("running on " + config.base_url() if alive() else "not running (only the UI needs it): mapwright up -d"))
     p = project(a)
     print(f"  ✓ project {p.name}: {len(p.cache)} files tracked" + (c(" (file cap reached)", AMBER) if p.truncated else ""))
+    _truncation_warning(p)
     errs = [r for r, e in p.cache.items() if (e.get("part") or {}).get("error")]
     if errs:
         print(c(f"  ! {len(errs)} file(s) do not parse: {', '.join(errs[:3])}", AMBER))
@@ -386,7 +495,10 @@ def main(argv=None) -> int:
     x = add("init", cmd_init, "Track this project and record the baseline.")
     x.add_argument("--connect", action="append", choices=list(connect.TARGETS), help="also connect an agent (repeatable)")
     x.add_argument("--scope", default="project", choices=["project", "user"])
+    x.add_argument("--apply-ignore", action="store_true", help="add the suggested ignore patterns to the settings")
     x.add_argument("--agents-md", nargs="?", const="AGENTS.md", default=None, help="add usage notes to AGENTS.md (or a file you name)")
+    x.add_argument("--local", action="store_true", help="keep history in <project>/.mapwright instead of ~/.mapwright")
+    x.add_argument("--home", metavar="DIR", default=None, help="keep history in DIR (relative to the project root)")
     x = add("up", cmd_up, "Start the daemon (UI + background tracking).", path=False)
     x.add_argument("-d", "--detach", action="store_true")
     x.add_argument("--no-watch", action="store_true")
@@ -461,6 +573,7 @@ def main(argv=None) -> int:
     if not getattr(a, "fn", None):
         print(GUIDE)
         return 0
+    config.set_start(getattr(a, "path", None) or getattr(a, "root", None))
     try:
         a.fn(a)
     except ValueError as e:
