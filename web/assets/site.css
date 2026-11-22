@@ -15,7 +15,7 @@ nav.links{display:flex;gap:18px;margin-left:12px}nav.links a{color:var(--text2);
 .hero{padding:76px 0 40px;text-align:center}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--line);border-radius:20px;color:var(--text2);font-size:13px;margin-bottom:22px}.eyebrow b{color:var(--ok);font-weight:600}
 .hero h1{font-size:clamp(34px,5.4vw,60px);line-height:1.08;letter-spacing:-.025em;font-weight:700;max-width:900px;margin:0 auto}
-.hero h1 em{font-style:normal;background:linear-gradient(90deg,#548af7,#c77dbb);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1 em{font-style:normal;background:linear-gradient(180deg,#ffffff 15%,#bcd3ff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 22px rgba(140,180,255,.35))}
 .hero p.lead{color:var(--text2);font-size:18px;max-width:720px;margin:20px auto 30px}
 .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .install{margin:26px auto 0;display:inline-flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px 10px 16px;font:14px "JetBrains Mono",monospace;color:var(--text2)}.install b{color:var(--ok);font-weight:500}
