@@ -30,6 +30,7 @@ from pathlib import Path
 from . import analyze as A
 from . import concepts as C
 from . import config, infra
+from . import ignore as ignore_mod
 from .redact import redact
 
 try:
@@ -87,6 +88,7 @@ class Project:
         self.concepts: dict = {}
         self.infra: dict = {"nodes": [], "edges": []}
         self.truncated = False
+        self.truncated_info: dict | None = None
         self._journal_cache: tuple[int, list[dict]] = (-1, [])
         self._lock = _LOCKS.setdefault(self.key, threading.RLock())
         self._held = 0
@@ -178,8 +180,10 @@ class Project:
         """Re-read whatever changed on disk. Returns the paths whose content changed."""
         with self.locked():
             st = config.settings()
-            ignore = set(st.get("ignore") or [])
-            stats, self.truncated = A.scan(self.root) if not ignore else self._scan_ignoring(ignore)
+            matcher = ignore_mod.Matcher(self.root, st.get("ignore") or [], st.get("respect_gitignore", True))
+            info: dict = {}
+            stats, self.truncated = A.scan(self.root, matcher, st.get("max_files"), info)
+            self.truncated_info = info if self.truncated else None
             changed = []
             new_cache = {}
             for rel, sig in stats.items():
@@ -206,15 +210,6 @@ class Project:
             if not self.steps():
                 self._snapshot("baseline (before tracking started)", "", "baseline")
             return changed
-
-    def _scan_ignoring(self, ignore: set[str]):
-        saved = set(A.IGNORE_DIRS)
-        A.IGNORE_DIRS.update(ignore)
-        try:
-            return A.scan(self.root)
-        finally:
-            A.IGNORE_DIRS.clear()
-            A.IGNORE_DIRS.update(saved)
 
     def _analyze(self, rel: str, sig) -> dict:
         if A._secretish(rel):
@@ -590,6 +585,7 @@ class Project:
         evs = self.journal()
         return {
             "key": self.key, "name": self.name, "root": self.root, "version": self.version, "truncated": self.truncated,
+            "truncated_info": self.truncated_info,
             "steps": [{**{k: s.get(k) for k in ("n", "title", "intent", "source", "ts", "summary", "changes", "prompt")}, "title_check": self.title_check(s)}
                       for s in steps],
             "pending": self.pending(),
