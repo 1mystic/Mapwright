@@ -23,6 +23,18 @@ Static site; the browser talks to the user's own local daemon, so no code or dat
 - Site: landing, docs, live demo, connect guide generating `connect` commands, MCP and skill snippets.
 - Hosting: Cloudflare Pages (primary), GitHub Pages (backup, workflow exists), Firebase Hosting (config exists).
 
+## Phase 2b: System view (default landing view, app and site)
+
+An abstract, illustrative system-design diagram drawn with icons: clients, UI, API gateway/routes, services,
+workers/queues, databases and caches, storage, external APIs, CI/hosting. Built from data Mapwright already has
+(layers, routes, tables, infra nodes, concepts), not drawn by the agent.
+
+- Own SVG renderer (icons + labelled boxes + arrows, auto layout by tier), not Mermaid, so it can look designed.
+- Click a component: the right sidebar (Inspector) opens its detail: files, key symbols, routes, tables, callers/callees, mechanisms, history.
+- Becomes the default tab in the app and the hero on the website demo; the other views stay as drill-downs.
+- Works per step (like other views) and marks added/changed components.
+- Needs a stable component-classification step (shared with Phase 1 item 4 analysis) and icon set additions.
+
 ## Phase 3: native apps (0.3+)
 
 - `.deb` (Ubuntu) and Homebrew formula installing the Python package, launcher and desktop entry.
