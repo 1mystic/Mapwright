@@ -5,9 +5,21 @@ Structure, architecture, data model, cloud, API flows, logic and every step, dra
 and readable by the agent itself for a fraction of the tokens.</p>
 
 <p align="center">
-<a href="#quickstart">Quickstart</a> · <a href="#what-you-see">What you see</a> · <a href="#how-it-keeps-token-cost-low">Token cost</a> ·
+<a href="https://pypi.org/project/mapwright-agent/"><img alt="PyPI" src="https://img.shields.io/pypi/v/mapwright-agent?color=3574f0"></a>
+<img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-3574f0">
+<img alt="Dependencies" src="https://img.shields.io/badge/runtime%20dependencies-0-5fb865">
+<a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-868a91"></a>
+<img alt="Status" src="https://img.shields.io/badge/status-beta-e5a13e">
+</p>
+
+<p align="center">
+<a href="https://mapwright.pages.dev">Website</a> · <a href="https://mapwright.pages.dev/app/?demo">Live demo</a> · <a href="#quickstart">Quickstart</a> · <a href="#what-you-see">What you see</a> · <a href="#how-it-keeps-token-cost-low">Token cost</a> ·
 <a href="#no-cheating">Verification</a> · <a href="#works-with">Works with</a> · <a href="docs/SETUP.md">Setup &amp; deploy guide</a> · <a href="docs/COMMANDS.md">Commands</a>
 </p>
+
+> **Beta.** Mapwright is ready for testing and feedback. The core (tracking, verification, MCP tools, hooks, the map UI) is
+> stable enough for daily use; expect rough edges in the UI and in JS/TS analysis. Please
+> [report what you find](https://github.com/1mystic/Mapwright/issues).
 
 <p align="center"><img src="docs/img/overview.png" alt="Mapwright overview of a project built by an agent: counts, latest step, layers, mechanisms, entry points" width="100%"></p>
 
@@ -26,15 +38,23 @@ is; everything else is computed, and everything it claims is checked.
 ## Quickstart
 
 ```bash
-pipx install mapwright-agent          # zero dependencies, Python 3.10+ (command: mapwright)
-# or straight from GitHub: pipx install git+https://github.com/1mystic/Mapwright.git
+pipx install mapwright-agent          # zero dependencies, Python 3.10+; the command is `mapwright`
 cd your-project
 mapwright init --connect claude-code  # baseline + MCP server + hooks for this project
 mapwright open                        # the map in your browser
 ```
 
-Then work with your agent as usual. Other agents: `mapwright connect --list`. Full guide, including the
-VS Code extension and hosting the website for free: [docs/SETUP.md](docs/SETUP.md).
+Then work with your agent as usual. Other agents: `mapwright connect --list`.
+
+Other ways to install: `pipx install git+https://github.com/1mystic/Mapwright.git` (latest), or a wheel from the
+[releases](https://github.com/1mystic/Mapwright/releases). The PyPI name `mapwright` belongs to an unrelated project, hence `mapwright-agent`.
+
+- **Keep history inside the project:** `mapwright init --local` (see [Commands](docs/COMMANDS.md)).
+- **Big repo?** `init` suggests folders to ignore (generated code, data shards); `.gitignore` is respected by default.
+- **Use the hosted site:** `mapwright open --web` opens [mapwright.pages.dev](https://mapwright.pages.dev), which talks to your local Mapwright; your code never leaves your machine.
+- **Stop it:** `mapwright down`; remove an agent with `mapwright disconnect`. [All the ways](docs/COMMANDS.md#stopping-mapwright).
+
+Full guide, including the VS Code extension: [docs/SETUP.md](docs/SETUP.md).
 
 ## What you see
 
@@ -51,7 +71,7 @@ at any earlier step:
 | **Data** | Tables, columns, keys and relations | SQL (also inside code strings), SQLAlchemy, Django, Prisma, zod schemas, Firestore/Storage collections with their security rules |
 | **Cloud** | Containers, services, databases, caches, queues, buckets, functions, CI, external APIs | Dockerfile, compose, Terraform, Kubernetes, serverless, CI, `.env.example`, SDK imports |
 | **Processes** | Each HTTP route → handler → the functions it calls → the tables they touch | routes (FastAPI, Flask, Express, Next.js), call graph |
-| **Logic** | Every function by complexity, with algorithm hints, and a flowchart of its control flow | Python `ast` (JS/TS: outline) |
+| **Logic** | Every function by complexity, with algorithm hints, and a flowchart of its control flow | Python `ast` (JS/TS: outline), React components and hooks tagged |
 | **Concepts** | Mechanisms in use (29 kinds: caching, retries, queues, auth, rate limiting, ORM, LLM calls …) with evidence in the code | the concept catalog |
 | **Timeline** | Every step: what was asked, files changed with diffs, design changes, verification | the step store |
 
@@ -125,7 +145,7 @@ the MCP tools or, without MCP, the same through the shell.
 
 Everything runs on your machine. The daemon listens on `127.0.0.1` only and needs a token. Secret-looking
 files (`.env`, keys, credentials) are tracked as "changed" but never read. Code shown in the UI and in diffs
-is passed through redaction. Nothing is sent anywhere.
+is passed through redaction. Nothing is sent anywhere. The optional hosted site is static: it only runs in your browser and calls your own local daemon (exact-origin allowlist plus the token); no code or history is uploaded.
 
 ## Limits
 
@@ -135,8 +155,15 @@ is passed through redaction. Nothing is sent anywhere.
 - Firestore and Cloud Storage rules (`firestore.rules`, `storage.rules`) and static `collection()`/`doc()` calls appear as `firestore:`/`storage:` collections with allowed operations; paths built at runtime, and Firestore use from Python, are not seen. SQL inside content strings (e.g. quiz text) can still be reported as tables.
 - Structure is drawn for Python, JS/TS, SQL and Prisma. Other languages are tracked for changes but not drawn.
 - JS/TS flowcharts are an outline (branches and calls in order), not a full parse.
+- Beta caveats: the UI and the System view's arrows (illustrative, not verified dependencies) are still being polished; Safari blocks the hosted site from reaching `127.0.0.1`, use `mapwright open` there.
 - Steps close at turn ends only with hooks (Claude Code, opencode); elsewhere the agent calls `step` or a quiet period closes it.
 - The VS Code extension was packaged and checked for syntax here, not exercised inside an editor.
+
+## Roadmap and feedback
+
+Planned: a native Ubuntu `.deb` and macOS app, polish of the System view, more languages. See [docs/ROADMAP.md](docs/ROADMAP.md) and the
+[changelog](CHANGELOG.md). Bugs, ideas and traces from real projects are very welcome in [issues](https://github.com/1mystic/Mapwright/issues);
+running `mapwright doctor` first and pasting its output helps.
 
 ## Project layout
 
@@ -144,7 +171,7 @@ is passed through redaction. Nothing is sent anywhere.
 src/mapwright/        analysis, tracking, MCP server, hooks, daemon, CLI, UI
 integrations/         VS Code extension (.vsix included), Claude Code plugin, opencode plugin, Agent Skill
 web/                  website (landing, docs, setup) + scripts/build_site.py builds the live demo
-docs/                 SETUP (install, connect, deploy), COMMANDS, AGENT_PROTOCOL, ARCHITECTURE
+docs/                 SETUP, COMMANDS, AGENT_PROTOCOL, ARCHITECTURE, ROADMAP, RELEASING
 scripts/              demo_session.py (scripted agent), build_site.py
 tests/
 ```
