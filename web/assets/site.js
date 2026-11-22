@@ -52,3 +52,14 @@ if (document.querySelector(".hero") && document.documentElement.classList.contai
     wrap.append(b);
   });
 })();
+
+// docs tables: keep each short token of a command together (a flag never breaks as "[-" + "-connect"); only long alternations may break
+document.querySelectorAll(".tbl td code").forEach((code) => {
+  const text = code.textContent; if (!text.includes(" ")) return;
+  const frag = document.createDocumentFragment();
+  text.split(/( +)/).forEach((tok) => {
+    if (!tok.trim() || tok.length > 26) { frag.append(tok); return; }
+    const s = document.createElement("span"); s.style.whiteSpace = "nowrap"; s.textContent = tok; frag.append(s);
+  });
+  code.replaceChildren(frag);
+});

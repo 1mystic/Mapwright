@@ -98,3 +98,8 @@ pre,pre.code{max-width:100%;overflow-x:auto}.tbl{overflow-x:auto}
   .install{overflow-x:visible;white-space:normal}.install span{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
   .window .bar span{display:none}
 }
+
+/* ---- docs tables: long commands wrap inside their cell instead of squeezing the description column */
+.tbl td{overflow-wrap:anywhere}
+.tbl td code{white-space:normal;overflow-wrap:break-word;display:inline;line-height:1.75;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.tbl th:first-child:nth-last-child(2){width:46%}
