@@ -38,3 +38,13 @@ def test_layout_rows_cannot_be_pushed_off_screen():
     css = (UI / "app.css").read_text()
     assert "grid-template-rows: 40px minmax(0, 1fr) auto 24px" in css  # a tall panel scrolls instead of growing the row
     assert "height: calc(100vh / var(--z, 1))" in css and '"--z"' in (UI / "app.js").read_text()  # still fits when zoomed
+
+
+def test_canvas_does_not_steal_clicks_and_entities_are_wired():
+    js = (UI / "app.js").read_text()
+    # the pointer is captured only once a drag really starts, so clicks/double-clicks reach the node under the cursor
+    i = js.index('canvas.addEventListener("pointerdown"')
+    assert "setPointerCapture" not in js[i:js.index("\n", i)]
+    assert "document.elementFromPoint(e.clientX, e.clientY)" in js
+    # Mermaid 10 entity ids (entity-<name>-<uuid>) are recognised, so Data-view tables are clickable
+    assert "[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}" in js

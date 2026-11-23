@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fix: clicking a diagram node inspects it and double-clicking opens it again (the canvas captured the pointer on press, so clicks never reached the node and a double-click zoomed out instead).
+- Fix: tables in the Data view are clickable (Mermaid 10 entity ids were not recognised); double-clicking a System component opens its first item; double-click on empty canvas fits the view.
+
 ## 0.3.1
 
 - Fix: auto-step titles never come from text an agent harness injects (subagent reports, notifications, pasted blocks, IDE context); only the user's own words, or a title computed from the changes.

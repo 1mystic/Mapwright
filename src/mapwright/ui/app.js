@@ -451,7 +451,7 @@
       const t1 = mk("text", { x: 58, y: h / 2 - 3, class: "systitle" }, inner), t2 = mk("text", { x: 58, y: h / 2 + 15, class: "syssub" }, inner);
       const dot = mk("circle", { cx: w - 12, cy: 12, r: 5, class: "sysdot" }, inner), dt = mk("title", {}, dot);
       const open = () => { if (!S.sysComps[id]) return; select({ kind: "component", ref: id }); svg.querySelectorAll(".sysnode.on").forEach((n) => n.classList.remove("on")); g.classList.add("on"); };
-      g.addEventListener("click", open); g.addEventListener("dblclick", (e) => e.stopPropagation()); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      g.addEventListener("click", open); g.addEventListener("dblclick", (e) => { e.stopPropagation(); const first = ((S.sysComps[id] || {}).sections || []).flatMap((x) => x.rows || [])[0]; if (first && first.run) first.run(); }); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
       nodes[id] = { g, tt, ic, t1, t2, dot, dt };
     }
     // comps: components present in this frame; marks: {id: "new"|"changed"} (null = use the component's own state); animate: play enter/pulse
@@ -671,10 +671,12 @@
     s.setAttribute("width", w); s.setAttribute("height", h); s.style.maxWidth = "none";
     if (vs.fit !== false || !vs.fitted) { z.fit(w, h); vs.fitted = true; vs.fit = false; } else z.apply();
     const nodes = d.nodes || {};
+    const entityKey = {}; for (const k of Object.keys(nodes)) if (k.startsWith("entity:")) entityKey[k.slice(7).toLowerCase().replace(/[^a-z0-9]/g, "")] = k;
     const keyOf = (g) => { const id = g.id || ""; let m;
       if ((m = id.match(/^flowchart-(.+)-\d+$/))) return m[1];
       if ((m = id.match(/^classId-(.+)-\d+$/))) return "class:" + m[1];
-      if ((m = id.match(/^entity-(.+)-\d+$/))) return "entity:" + m[1];
+      // Mermaid 10 ids entities as entity-<name without _>-<uuid> (older: -<n>); match on the normalised name
+      if ((m = id.match(/^entity-(.+?)-(?:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|\d+)$/))) return entityKey[m[1].toLowerCase().replace(/[^a-z0-9]/g, "")] || "entity:" + m[1];
       return null; };
     stage.querySelectorAll("g.node, g[id^=classId-], g[id^=entity-]").forEach((g) => {
       const key = keyOf(g); const info = key && nodes[key]; if (!info) return;
@@ -695,10 +697,20 @@
       b("zoom-in", "Zoom in", () => { const r = canvas.getBoundingClientRect(); zoomAt(1.2, r.width / 2, r.height / 2); }), b("fit", "Fit to window", () => fit()));
     canvas.addEventListener("wheel", (e) => { e.preventDefault(); const r = canvas.getBoundingClientRect(); if (e.ctrlKey || e.metaKey || !e.shiftKey) zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - r.left, e.clientY - r.top); else { vs.x -= e.deltaY; apply(); } }, { passive: false });
     let drag = null;
-    canvas.addEventListener("pointerdown", (e) => { if (e.button !== 0 || e.target.closest("pre")) return; drag = { x: e.clientX, y: e.clientY, ox: vs.x, oy: vs.y, moved: false }; canvas.setPointerCapture(e.pointerId); });
-    canvas.addEventListener("pointermove", (e) => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; canvas.classList.add("drag"); } vs.x = drag.ox + dx; vs.y = drag.oy + dy; apply(); });
-    canvas.addEventListener("pointerup", () => { drag = null; canvas.classList.remove("drag"); });
-    canvas.addEventListener("dblclick", (e) => { if (!e.target.closest("pre, .node, g[tabindex]")) fit(); });
+    // Capture the pointer only once a drag really starts: before that, clicks and double-clicks must reach the node under the cursor.
+    canvas.addEventListener("pointerdown", (e) => { if (e.button !== 0 || e.target.closest("pre")) return; drag = { x: e.clientX, y: e.clientY, ox: vs.x, oy: vs.y, moved: false, id: e.pointerId }; });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved) { if (Math.abs(dx) + Math.abs(dy) <= 3) return; drag.moved = true; canvas.classList.add("drag"); try { canvas.setPointerCapture(drag.id); } catch (err) {} }
+      vs.x = drag.ox + dx; vs.y = drag.oy + dy; apply();
+    });
+    const endDrag = () => {
+      if (drag && drag.moved) { const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; canvas.addEventListener("click", eat, { capture: true, once: true }); setTimeout(() => canvas.removeEventListener("click", eat, { capture: true }), 0); }
+      drag = null; canvas.classList.remove("drag");
+    };
+    canvas.addEventListener("pointerup", endDrag); canvas.addEventListener("pointercancel", endDrag);
+    // Double-click on empty canvas fits the diagram; on a node, the node's own handler opens it.
+    canvas.addEventListener("dblclick", (e) => { const hit = document.elementFromPoint(e.clientX, e.clientY) || e.target; if (!hit.closest("pre, .node, g[tabindex], [id^=classId-], [id^=entity-]")) fit(); });
     return { apply, fit };
   }
   function onNode(info) {
