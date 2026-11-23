@@ -372,13 +372,13 @@
 
   // ---- system view: an abstract, icon-based picture of the whole system, built from the analysis
   const SYS_NODE = { w: 184, h: 84, gx: 64, gy: 22, top: 56, left: 28 };
-  async function buildSystem() {
-    const m = await model(), st = S.st, files = st.files || [];
+  async function buildSystem(mm, frame) {
+    const m = mm || await model(), st = S.st, files = frame ? [] : st.files || [];
     const byLayer = {}; for (const mod of Object.values(m.modules || {})) (byLayer[mod.layer] = byLayer[mod.layer] || []).push(mod.file);
     const status = (paths) => { const set = new Set(paths); let a = 0, c = 0; for (const f of files) if (set.has(f.path)) { if (f.status === "A") a++; else if (f.status === "M") c++; } return a ? "new" : c ? "changed" : null; };
     const fileRows = (paths) => [...new Set(paths)].sort().map((p) => ({ label: base(p), meta: p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "", run: () => openFile(p) }));
     const fnRows = (paths) => { const set = new Set(paths); return Object.entries(m.functions || {}).filter(([, f]) => set.has(f.file)).sort((a, b) => (b[1].complexity || 0) - (a[1].complexity || 0)).slice(0, 12).map(([id, f]) => ({ label: f.qual, meta: `cx ${f.complexity || 0}`, run: () => select({ kind: "function", ref: id, file: f.file, line: f.line }) })); };
-    const infra = (st.infra && st.infra.nodes) || [];
+    const infra = (m.infra && m.infra.nodes) || (st.infra && st.infra.nodes) || [];
     const infraRows = (nodes) => nodes.map((n) => ({ label: n.label, meta: n.kind, run: () => select({ kind: "infra", ref: n.id }) }));
     const comps = [];
     const add = (c) => { c.sections = c.sections || []; c.stats = c.stats || []; c.state = c.state || status(c.files || []); comps.push(c); };
@@ -414,50 +414,125 @@
     const tests = byLayer.test || []; if (tests.length) add({ id: "tests", tier: 5, icon: "beaker", title: "Tests", sub: `${tests.length} files`, desc: "Automated checks.", files: tests, stats: [["files", tests.length]], sections: [{ title: "Files", rows: fileRows(tests) }] });
     return comps;
   }
-  async function systemView(v) {
-    const bar = el("div", "vbar"); bar.append(el("span", "title", "System"), el("span", "note", "Click a component to see what is inside it · drag to pan · wheel to zoom · double-click to fit"), el("span", "spacer"));
-    const sc = el("div", "canvas sys"); const stage = el("div", "stage"); sc.append(stage); v.append(bar, sc);
-    let comps; try { comps = await buildSystem(); } catch (e) { sc.append(el("div", "empty", "The system picture is not available for this step.")); return; }
-    if (S.active !== "system") return;
-    S.sysComps = Object.fromEntries(comps.map((c) => [c.id, c]));
+  // layout for a list of components: same ids always land on the same spot for the same list
+  function sysLayout(comps) {
     const { w, h, gx, gy, top, left } = SYS_NODE, main = [0, 1, 2, 3, 4].filter((t) => comps.some((c) => c.tier === t));
-    const TIER = ["Clients", "Interface", "Logic", "Data", "Outside"];
     const col = Object.fromEntries(main.map((t, i) => [t, i])), pos = {};
     let maxRows = 1; for (const t of main) { const cs = comps.filter((c) => c.tier === t); maxRows = Math.max(maxRows, cs.length); cs.forEach((c, i) => { pos[c.id] = { x: left + col[t] * (w + gx), y: top + i * (h + gy), c }; }); }
     const plat = comps.filter((c) => c.tier === 5), W = Math.max(main.length * (w + gx) - gx + left * 2, plat.length * (w + 20) + left * 2, 480);
     const platY = top + maxRows * (h + gy) + 44;
     plat.forEach((c, i) => { pos[c.id] = { x: left + i * (w + 20), y: platY, c }; });
     const H = plat.length ? platY + h + 28 : top + maxRows * (h + gy) + 10;
+    return { main, plat, pos, W, H, platY };
+  }
+  // draw every component of `layoutComps` once; setFrame() then shows/hides/updates them in place
+  function drawSystemMap(layoutComps) {
+    const { w, h, left } = SYS_NODE, { main, plat, pos, W, H, platY } = sysLayout(layoutComps);
+    const TIER = ["Clients", "Interface", "Logic", "Data", "Outside"];
     const svg = document.createElementNS(NS, "svg"); svg.setAttribute("class", "sysmap"); svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     const mk = (tag, attrs, parent = svg) => { const n = document.createElementNS(NS, tag); for (const [k, val] of Object.entries(attrs || {})) n.setAttribute(k, val); parent.append(n); return n; };
     const defs = mk("defs"), mark = mk("marker", { id: "sysarrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs); mk("path", { d: "M0 1 L9 5 L0 9z", class: "sysarrowhead" }, mark);
-    main.forEach((t, i) => { const lb = mk("text", { x: left + i * (w + gx), y: 30, class: "systier" }); lb.textContent = TIER[t].toUpperCase(); });
+    main.forEach((t, i) => { const lb = mk("text", { x: left + i * (w + SYS_NODE.gx), y: 30, class: "systier" }); lb.textContent = TIER[t].toUpperCase(); });
     if (plat.length) { const lb = mk("text", { x: left, y: platY - 16, class: "systier" }); lb.textContent = "PLATFORM"; mk("line", { x1: left, x2: W - left, y1: platY - 30, y2: platY - 30, class: "sysrule" }); }
-    const link = (a, b) => { const p = pos[a], q = pos[b], x1 = p.x + w, y1 = p.y + h / 2, x2 = q.x, y2 = q.y + h / 2, mx = (x1 + x2) / 2; mk("path", { d: `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2 - 2} ${y2}`, class: "sysedge", "marker-end": "url(#sysarrow)" }); };
+    const edges = [];
+    const link = (a, b) => { const p = pos[a], q = pos[b], x1 = p.x + w, y1 = p.y + h / 2, x2 = q.x, y2 = q.y + h / 2, mx = (x1 + x2) / 2; edges.push({ a, b, n: mk("path", { d: `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2 - 2} ${y2}`, class: "sysedge", "marker-end": "url(#sysarrow)" }) }); };
     for (let i = 0; i < main.length - 1; i++) {
-      const A = comps.filter((c) => c.tier === main[i]), B = comps.filter((c) => c.tier === main[i + 1]);
+      const A = layoutComps.filter((c) => c.tier === main[i]), B = layoutComps.filter((c) => c.tier === main[i + 1]);
       if (A.length * B.length <= 12) for (const a of A) for (const b of B) link(a.id, b.id);
       else { A.forEach((a, k) => link(a.id, B[Math.min(k, B.length - 1)].id)); B.forEach((b, k) => k >= A.length && link(A[A.length - 1].id, b.id)); }
     }
+    const nodes = {};
     for (const p of Object.values(pos)) {
-      const c = p.c, g = mk("g", { class: "sysnode" + (S.sel?.kind === "component" && S.sel.ref === c.id ? " on" : ""), transform: `translate(${p.x},${p.y})`, tabindex: 0, role: "button" });
-      mk("title", {}, g).textContent = c.desc;
-      mk("rect", { width: w, height: h, rx: 10, class: "sysbox" }, g);
-      mk("circle", { cx: 30, cy: h / 2, r: 18, class: "sysdisc" }, g);
-      const ic = mk("use", { href: "icons.svg#" + c.icon, x: 20, y: h / 2 - 10, width: 20, height: 20, class: "sysicon" }, g);
-      const t1 = mk("text", { x: 58, y: h / 2 - 3, class: "systitle" }, g); t1.textContent = c.title.length > 17 ? c.title.slice(0, 16) + "…" : c.title;
-      const t2 = mk("text", { x: 58, y: h / 2 + 15, class: "syssub" }, g); t2.textContent = (c.sub || "").length > 22 ? c.sub.slice(0, 21) + "…" : c.sub || "";
-      if (c.state) { mk("circle", { cx: w - 12, cy: 12, r: 5, class: "sysdot " + c.state }, g); mk("title", {}, g).textContent = c.state === "new" ? "new since the last step" : "changed since the last step"; }
-      const open = () => { select({ kind: "component", ref: c.id }); svg.querySelectorAll(".sysnode.on").forEach((n) => n.classList.remove("on")); g.classList.add("on"); };
+      const id = p.c.id, g = mk("g", { class: "sysnode gone", transform: `translate(${p.x},${p.y})`, tabindex: 0, role: "button" }), inner = mk("g", { class: "sysinner" }, g);
+      const tt = mk("title", {}, inner);
+      mk("rect", { width: w, height: h, rx: 10, class: "sysbox" }, inner);
+      mk("circle", { cx: 30, cy: h / 2, r: 18, class: "sysdisc" }, inner);
+      const ic = mk("use", { x: 20, y: h / 2 - 10, width: 20, height: 20, class: "sysicon" }, inner);
+      const t1 = mk("text", { x: 58, y: h / 2 - 3, class: "systitle" }, inner), t2 = mk("text", { x: 58, y: h / 2 + 15, class: "syssub" }, inner);
+      const dot = mk("circle", { cx: w - 12, cy: 12, r: 5, class: "sysdot" }, inner), dt = mk("title", {}, dot);
+      const open = () => { if (!S.sysComps[id]) return; select({ kind: "component", ref: id }); svg.querySelectorAll(".sysnode.on").forEach((n) => n.classList.remove("on")); g.classList.add("on"); };
       g.addEventListener("click", open); g.addEventListener("dblclick", (e) => e.stopPropagation()); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      nodes[id] = { g, tt, ic, t1, t2, dot, dt };
     }
-    stage.append(svg);
+    // comps: components present in this frame; marks: {id: "new"|"changed"} (null = use the component's own state); animate: play enter/pulse
+    const setFrame = (comps, marks, animate) => {
+      const by = Object.fromEntries(comps.map((c) => [c.id, c])); S.sysComps = by;
+      const restart = (g, cls) => { g.classList.remove(cls); void g.getBoundingClientRect(); g.classList.add(cls); };
+      for (const [id, nd] of Object.entries(nodes)) {
+        const c = by[id], was = !nd.g.classList.contains("gone");
+        if (!c) { nd.g.classList.add("gone"); nd.g.classList.remove("enter", "pulse", "on"); nd.g.setAttribute("tabindex", -1); continue; }
+        nd.g.classList.remove("gone"); nd.g.setAttribute("tabindex", 0);
+        nd.tt.textContent = c.desc; nd.ic.setAttribute("href", "icons.svg#" + c.icon);
+        nd.t1.textContent = c.title.length > 17 ? c.title.slice(0, 16) + "…" : c.title; nd.t2.textContent = (c.sub || "").length > 22 ? c.sub.slice(0, 21) + "…" : c.sub || "";
+        const stt = marks ? marks[id] || null : c.state;
+        nd.dot.setAttribute("class", "sysdot" + (stt ? " " + stt : "")); nd.dt.textContent = stt === "new" ? "new since the last step" : stt === "changed" ? "changed since the last step" : "";
+        nd.g.classList.toggle("on", S.sel?.kind === "component" && S.sel.ref === id);
+        if (animate && (!was || marks?.[id] === "new")) restart(nd.g, "enter"); else if (animate && marks?.[id] === "changed") restart(nd.g, "pulse"); else nd.g.classList.remove("enter", "pulse");
+      }
+      for (const e of edges) e.n.classList.toggle("gone", !by[e.a] || !by[e.b]);
+    };
+    return { svg, W, H, setFrame };
+  }
+  const sysSig = (c) => c.sub + "|" + JSON.stringify(c.stats);
+  async function systemView(v) {
+    const bar = el("div", "vbar"); bar.append(el("span", "title", "System"), el("span", "note", "Click a component to see what is inside it · drag to pan · wheel to zoom · double-click to fit"), el("span", "spacer"));
+    const sc = el("div", "canvas sys"); const stage = el("div", "stage"); sc.append(stage); v.append(bar, sc);
+    let comps; try { comps = await buildSystem(); } catch (e) { sc.append(el("div", "empty", "The system picture is not available for this step.")); return; }
+    if (S.active !== "system") return;
+    S.sysComps = Object.fromEntries(comps.map((c) => [c.id, c]));
+    let map = drawSystemMap(comps); map.setFrame(comps, null, false); stage.append(map.svg);
     const vs = S.view.sys || (S.view.sys = { x: 0, y: 0, k: 1, fitted: false });
     const zc = zoomControls(bar, sc, vs);
-    requestAnimationFrame(() => { if (!vs.fitted) { zc.fit(W, H); vs.fitted = true; } else zc.apply(); });
+    requestAnimationFrame(() => { if (!vs.fitted) { zc.fit(map.W, map.H); vs.fitted = true; } else zc.apply(); });
+    timelapse(bar, stage, v, () => map, (m) => { map = m; zc.fit(m.W, m.H); }, comps);
+  }
+  // ---- architecture timelapse: replays the System picture step 0 → latest → LIVE from the per-step models
+  function timelapse(bar, stage, v, getMap, setMap, staticComps) {
+    const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const steps = (S.st.steps || []).map((s) => ({ key: String(s.n), label: "STEP " + s.n, title: s.title })), frames = [...steps, { key: "live", label: "LIVE", title: "latest, including uncommitted changes" }];
+    const wrap = el("span", "tlp"); wrap.title = "Replay how the architecture grew, step by step (Space)";
+    const play = el("button", "tbtn tlplay", "▶"); play.title = "Play the timelapse (Space)"; play.setAttribute("aria-label", "Play timelapse");
+    const slider = el("input", "tlslider"); slider.type = "range"; slider.min = 0; slider.max = frames.length - 1; slider.value = frames.length - 1; slider.setAttribute("aria-label", "Timelapse step");
+    const lbl = el("span", "tllbl", "LIVE"), speed = el("button", "tbtn tlspeed", "1×"); speed.title = "Playback speed";
+    wrap.append(play, slider, lbl, speed); bar.append(wrap);
+    let data = null, loading = null, timer = null, spd = 1, i = frames.length - 1, laid = false;
+    const prefetch = () => loading || (loading = (async () => {
+      lbl.textContent = "loading…";
+      const out = [];
+      for (let k = 0; k < frames.length; k += 4) out.push(...await Promise.all(frames.slice(k, k + 4).map(async (f) => { try { return await buildSystem(await api(url(P("model"), { step: f.key })), true); } catch (e) { return null; } })));
+      data = out.map((c) => c || []);
+      const byId = new Map(); for (let k = data.length - 1; k >= 0; k--) for (const c of data[k]) if (!byId.has(c.id)) byId.set(c.id, c);
+      S.sysUnion = [...byId.values()];
+      return data;
+    })());
+    const show = (k, animate) => {
+      i = k; slider.value = k; lbl.textContent = frames[k].label; lbl.title = frames[k].title;
+      const comps = data[k], prev = k > 0 ? data[k - 1] : null, pm = new Map((prev || []).map((c) => [c.id, c])), marks = {};
+      if (prev) for (const c of comps) { const o = pm.get(c.id); marks[c.id] = !o ? "new" : sysSig(o) !== sysSig(c) ? "changed" : null; }
+      getMap().setFrame(comps, marks, animate && !reduce);
+    };
+    const ensureLayout = async () => {
+      await prefetch(); if (laid) return; laid = true;
+      const m = drawSystemMap(S.sysUnion); stage.replaceChildren(m.svg); setMap(m);
+    };
+    const stop = () => { clearInterval(timer); timer = null; play.textContent = "▶"; play.setAttribute("aria-label", "Play timelapse"); wrap.classList.remove("playing"); };
+    const tick = () => { if (!v.isConnected || S.active !== "system") return stop(); if (i >= frames.length - 1) return stop(); show(i + 1, true); if (i >= frames.length - 1) stop(); };
+    const start = async () => {
+      await ensureLayout(); if (!v.isConnected) return;
+      if (i >= frames.length - 1) show(0, false);
+      play.textContent = "❚❚"; play.setAttribute("aria-label", "Pause timelapse"); wrap.classList.add("playing");
+      clearInterval(timer); timer = setInterval(tick, 900 / spd);
+    };
+    const toggle = () => (timer ? stop() : start());
+    play.onclick = toggle;
+    speed.onclick = () => { spd = spd === 1 ? 2 : 1; speed.textContent = spd + "×"; if (timer) { clearInterval(timer); timer = setInterval(tick, 900 / spd); } };
+    slider.oninput = async () => { stop(); await ensureLayout(); show(+slider.value, true); };
+    S.sysPlayer = { toggle, v };
   }
 
   // ---- overview
+  const fmtTok = (n) => (n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+  const savingsTip = (sv) => `Estimate, not a measurement. The agent made ${sv.calls} map/symbol/find call${sv.calls === 1 ? "" : "s"}; their answers cost about ${sv.served_tokens.toLocaleString()} tokens (chars / 4). Reading the files those answers summarise (each file counted once per step, at most 30 files per call, smallest first) would cost about ${sv.counterfactual_tokens.toLocaleString()} tokens. Saved ≈ the difference, never below zero. Real savings depend on what the agent would actually have opened.`;
   function overview(v) {
     const st = S.st, sc = el("div", "scroll"); v.append(sc);
     const hero = el("div", "hero"); const t = el("div"); t.append(el("h1", null, st.name), el("div", "path mono", st.root)); hero.append(t, el("div", "grow"));
@@ -468,6 +543,11 @@
     for (const [k, label, tab] of [["files", "files", "d:files"], ["modules", "modules", "d:architecture"], ["functions", "functions", "logic"], ["classes", "classes", "d:classes"],
       ["tables", "tables", "d:data"], ["routes", "routes", "d:processes"], ["concepts", "mechanisms", "concepts"], ["infra", "infra nodes", "d:cloud"]]) {
       const s = el("div", "stat"); s.append(el("b", null, String(c[k])), el("span", null, label)); s.onclick = () => openTab(FIXED.find((x) => x.id === tab)); stats.append(s);
+    }
+    const sv = st.savings;
+    if (sv && sv.calls > 0 && sv.saved_tokens > 0) {
+      const s = el("div", "stat saved"); s.append(el("b", null, "≈ " + fmtTok(sv.saved_tokens)), el("span", null, "tokens saved (est.)")); s.tabIndex = 0;
+      s.title = savingsTip(sv); s.onclick = () => { S.btab = "steps"; S.bottomOpen = true; toast("info", "Token savings (estimate)", savingsTip(sv)); }; stats.append(s);
     }
     sc.append(stats);
     const grid = el("div", "grid2"); sc.append(grid);
@@ -924,6 +1004,7 @@
     if (S.st) {
       s.append(el("span", "it", `${S.st.counts.files} files indexed`));
       if (S.brief) { const b = el("span", "it", `brief ≈ ${S.brief.tokens} tokens`); b.title = "Size of the map an agent reads instead of exploring the code"; s.append(b); }
+      const sv = S.st.savings; if (sv && sv.calls > 0 && sv.saved_tokens > 0) { const t = el("span", "it", `≈ ${fmtTok(sv.saved_tokens)} tokens saved`); t.title = savingsTip(sv); s.append(t); }
       const st = el("span", "it", S.step === "live" ? `live · ${S.st.steps.length} steps` : `viewing step ${S.step}`); s.append(st);
     }
     const z = store.get("uizoom", 1); if (z !== 1) { const zi = el("span", "it link", `${Math.round(z * 100)}%`); zi.title = "Interface zoom (Ctrl+= / Ctrl+-). Click to reset"; zi.onclick = () => setZoom(1); s.append(zi); }
@@ -1043,6 +1124,7 @@
       if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "p")) { e.preventDefault(); palette(); }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") { e.preventDefault(); settings(); }
       if (e.key === "Escape") closeMenus();
+      if (e.key === " " && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey && S.active === "system" && S.sysPlayer && S.sysPlayer.v.isConnected && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName || "") && !document.querySelector(".menu, .modal")) { e.preventDefault(); S.sysPlayer.toggle(); }
       if ((e.ctrlKey || e.metaKey) && !e.altKey && ["=", "+", "-", "_", "0"].includes(e.key)) { e.preventDefault(); stepZoom(e.key === "0" ? 0 : e.key === "-" || e.key === "_" ? -1 : 1); }
       if (e.altKey && /^[1-9]$/.test(e.key)) { const t = FIXED[+e.key - 1]; if (t) openTab(t); }
     });

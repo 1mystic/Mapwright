@@ -663,6 +663,28 @@ class Project:
                       "status": "D", "error": False} for rel in sorted(set(base) - set(self.cache))]
         return rows
 
+    def savings(self, evs: list[dict] | None = None) -> dict:
+        """Estimate of the tokens an agent did not spend exploring: what the `map`/`symbol`/`find`
+        answers cost (chars/4) against reading the files they summarise (each file once per step)."""
+        evs = self.journal() if evs is None else evs
+        served = calls = 0
+        seen: set[tuple[int, str]] = set()
+        cf_chars = 0
+        win = 0
+        for e in evs:
+            if e["t"] == "step":
+                win = e["id"]
+            elif e["t"] == "mcp" and isinstance(e.get("chars"), int):
+                calls += 1
+                served += (max(0, e["chars"]) + 3) // 4
+                for f in e.get("files") or []:
+                    ent = self.cache.get(f)
+                    if (win, f) not in seen and ent and ent.get("stat"):
+                        seen.add((win, f))
+                        cf_chars += int(ent["stat"][1])
+        cf = (cf_chars + 3) // 4
+        return {"served_tokens": served, "counterfactual_tokens": cf, "saved_tokens": max(0, cf - served), "calls": calls}
+
     def state(self) -> dict:
         self.ensure()
         steps = self.steps()
@@ -696,6 +718,7 @@ class Project:
             "algorithms": sorted(({"id": fid, "hints": f["hints"], "file": f["file"], "line": f["line"]}
                                   for fid, f in fns.items() if any(h not in ("async I/O",) for h in f["hints"])),
                                  key=lambda x: (-len(x["hints"]), x["id"]))[:60],
+            "savings": self.savings(evs),
             "todos": v["todos"], "claims": v["claims"], "notes": v["notes"], "links": v["links"], "problems": v["problems"],
             "activity": [{k: e.get(k) for k in ("id", "ts", "t", "text", "tool", "files", "n", "title", "tid", "concept", "symbol", "role", "agent")}
                          for e in evs[-80:]],

@@ -18,3 +18,11 @@ def test_system_view_styles_and_icons_exist():
     for ic in ("user", "eye", "route", "box", "function", "database", "radio", "bolt", "search", "plug", "globe", "cloud", "server", "rotate", "beaker", "graph"):
         assert f'id="{ic}"' in sprite, ic
         assert f'"{ic}"' in js, ic
+
+
+def test_timelapse_and_savings_markers():
+    js = (UI / "app.js").read_text()
+    css = (UI / "app.css").read_text()
+    for m in ("function timelapse(", "drawSystemMap(", "prefers-reduced-motion", "S.sysPlayer.toggle()", "savingsTip(", "tokens saved"):
+        assert m in js, m
+    assert ".sysnode.enter" in css and ".sysnode.pulse" in css and ".sysnode.gone" in css and "prefers-reduced-motion" in css

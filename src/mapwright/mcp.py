@@ -46,17 +46,43 @@ TOOLS = [
 ]
 
 
+MAX_COVERED = 30  # files credited per call: deliberately conservative (smallest first)
+
+
+def _journal_use(p, name: str, text: str, files: list[str]) -> None:
+    """Record how much an answer cost and which files it stands in for (feeds the token-savings estimate)."""
+    try:
+        sizes = {f: (p.cache.get(f) or {}).get("stat", [0, 0])[1] for f in set(files) if f in p.cache}
+        covered = sorted(sizes, key=lambda f: (sizes[f], f))[:MAX_COVERED]
+        p.append({"t": "mcp", "tool": name, "chars": len(text), "files": covered})
+    except Exception:  # accounting must never break a tool call
+        pass
+
+
 def call(project, name: str, args: dict) -> str:
     p = project
     p.refresh()
     if name == "map":
         b = args.get("budget")
-        return brief.project_brief(p, int(b) if isinstance(b, int) and 400 <= b <= 20000 else _budget(), args.get("focus"))
+        focus = args.get("focus")
+        text = brief.project_brief(p, int(b) if isinstance(b, int) and 400 <= b <= 20000 else _budget(), focus)
+        pre = str(focus or "")
+        _journal_use(p, name, text, [m for m in p.model["modules"] if m.startswith(pre)])
+        return text
     if name == "find":
         rows = A.find_symbols(p.model, str(args.get("query", "")), 15)
-        return "\n".join(f"{r['id']} ({r['kind']}) {r['file']}:{r['line'] or ''}" for r in rows) or "no match"
+        text = "\n".join(f"{r['id']} ({r['kind']}) {r['file']}:{r['line'] or ''}" for r in rows) or "no match"
+        _journal_use(p, name, text, [r["file"] for r in rows if r.get("file")])
+        return text
     if name == "symbol":
-        return brief.symbol_card(p, str(args.get("name", "")))
+        text = brief.symbol_card(p, str(args.get("name", "")))
+        hit = A.resolve(p.model, str(args.get("name", "")))
+        fs = []
+        if hit:
+            n = hit[2]
+            fs = [n.get("file")] + [(p.model["functions"].get(c) or {}).get("file") for c in n.get("callers", []) + n.get("callees", [])]
+        _journal_use(p, name, text, [f for f in fs if f])
+        return text
     if name == "step":
         return brief.step_receipt(p.step(str(args.get("title", "")), str(args.get("intent", "") or "")))
     if name == "todo":
