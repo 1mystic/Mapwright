@@ -465,6 +465,18 @@ def cmd_export(a):
     print(f"{c('✓', GREEN)} wrote {out}")
 
 
+def cmd_report(a):
+    from .report import render_report
+    until = a.until
+    out = render_report(project(a), a.since, until, a.format)
+    if a.out:
+        with open(a.out, "w", encoding="utf-8") as fh:
+            fh.write(out)
+        print(f"{c('✓', GREEN)} wrote {a.out}")
+    else:
+        sys.stdout.write(out)
+
+
 def cmd_mcp(a):
     from . import mcp
     sys.exit(mcp.serve(a.root))
@@ -688,6 +700,11 @@ def main(argv=None) -> int:
     add("watch", cmd_watch, "Track from the files alone (any agent, no integration).")
     x = add("export", cmd_export, "Write MAP.md and every diagram to a folder.")
     x.add_argument("-o", "--out", default="mapwright-export")
+    x = add("report", cmd_report, "Markdown summary of how the architecture changed (for PR review).")
+    x.add_argument("--since", help="a step number or a git ref (default: origin/main or main, else the last step)")
+    x.add_argument("--until", type=int, help="a step number to end at (default: the working tree)")
+    x.add_argument("--format", default="md", choices=["md", "json"])
+    x.add_argument("-o", "--out", help="write to a file instead of stdout")
     x = add("mcp", cmd_mcp, "Run the MCP server on stdio (agents start this).", path=False)
     x.add_argument("--root")
     x = add("hook", cmd_hook, "Hook entry point (agents call this).", path=False)
