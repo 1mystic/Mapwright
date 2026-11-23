@@ -116,3 +116,19 @@ html[data-theme=light] .ic{background:rgba(53,116,240,.1)}
 .themetog{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;padding:0;border:1px solid var(--line);background:var(--panel);color:var(--text2);cursor:pointer;transition:border-color .15s,color .15s}
 .themetog:hover,.themetog:focus-visible{border-color:var(--muted);color:var(--text);outline:none}.themetog svg{display:block;width:16px;height:16px}
 .doc p code,.doc li code{white-space:nowrap}
+
+/* ---- landing page rhythm: every section is heading, intro, content blocks; one spacing scale */
+section h2{margin-bottom:12px}
+section p.sub{margin-bottom:32px}
+section .wrap>:not(h2):not(.sub)+:not(h2):not(.sub){margin-top:24px}
+section p.note{color:var(--text2);font-size:15px;max-width:720px}
+section p.sub code,section p.note code{white-space:nowrap}
+.cta.start{justify-content:flex-start}
+#views .grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:1080px){#views .grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){#views .grid{grid-template-columns:minmax(0,1fr)}}
+.final{text-align:center}.final p.sub{margin:0 auto 28px}.final .cta{justify-content:center}
+.stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:860px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+footer a:not(.brand){color:var(--text2)}footer a:not(.brand):hover{color:var(--text);text-decoration:none}
+.card p code{white-space:nowrap}
