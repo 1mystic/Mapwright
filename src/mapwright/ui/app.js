@@ -14,7 +14,7 @@
   const ago = (ts) => { const d = Math.max(0, Date.now() / 1000 - ts); return d < 60 ? `${Math.floor(d)}s ago` : d < 3600 ? `${Math.floor(d / 60)}m ago` : d < 86400 ? `${Math.floor(d / 3600)}h ago` : new Date(ts * 1000).toLocaleDateString(); };
   const clock = (ts) => new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const base = (p) => p.split("/").pop();
-  const short = (id) => (id || "").split(":").pop();
+  const short = (id) => String(id ?? "").split(":").pop();
   const store = { get(k, d) { try { const v = localStorage.getItem("mw." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem("mw." + k, JSON.stringify(v)); } catch (e) {} } };
   const url = (path, params = {}) => { const e = Object.entries(params).filter(([, v]) => v != null && v !== "").sort(([a], [b]) => a.localeCompare(b)); return e.length ? path + "?" + e.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&") : path; };
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
@@ -615,7 +615,9 @@
     for (const ch of changes) {
       const r = el("div", "fchg"); r.append(el("span", "k " + ch.kind, ch.kind[0].toUpperCase()), el("span", "p mono", ch.path));
       const c = el("span", "c"); if ("added" in ch) { c.append(el("span", "a", `+${ch.added}`), document.createTextNode(" "), el("span", "r", `−${ch.removed}`)); } else c.textContent = ch.note ? "not read" : "";
-      r.append(c); r.style.cursor = "pointer"; r.onclick = (e) => { e.stopPropagation(); if (!ch.note) openDiff(ch.path, from, to); };
+      r.append(c); r.style.cursor = "pointer"; r.title = "click: details · double-click: diff";
+      r.onclick = (e) => { e.stopPropagation(); select({ kind: "change", ref: ch.path, change: ch, from, to }); };
+      r.ondblclick = (e) => { e.stopPropagation(); if (!ch.note) openDiff(ch.path, from, to); };
       box.append(r);
     }
     return box;
@@ -800,7 +802,7 @@
     const st = S.st, last = st.steps[st.steps.length - 1];
     const liveEl = el("div", "tstep live" + (S.step === "live" ? " on" : "")); const h = el("div", "h"); h.append(el("span", "n", "now"), el("span", "ttl", st.pending.length ? "Work in progress" : "No changes since the last step"), el("span", "badge auto", "LIVE"));
     liveEl.append(h); if (st.pending.length) liveEl.append(changeList(st.pending, last ? String(last.n) : "live", "live"));
-    liveEl.onclick = () => setStep("live"); tl.append(liveEl);
+    liveEl.onclick = () => { setStep("live"); select({ kind: "step", ref: "live" }); }; tl.append(liveEl);
     for (const s of [...st.steps].reverse()) {
       const e = el("div", "tstep" + (S.step === s.n ? " on" : "")); const hh = el("div", "h");
       hh.append(el("span", "n", "#" + s.n), el("span", "ttl", s.title), el("span", "badge " + s.source, s.source), el("span", "when", `${clock(s.ts)} · ${ago(s.ts)}`)); e.append(hh);
@@ -809,7 +811,7 @@
       if (s.n > 0) e.append(deltaChips(s.summary));
       if (s.title_check && s.title_check !== "ok") { const w = el("div", "chips"); w.append(el("span", "chip warn", "⚠ " + s.title_check)); e.append(w); }
       if (s.changes?.length) e.append(changeList(s.changes.slice(0, 14), String(Math.max(0, s.n - 1)), String(s.n)));
-      e.onclick = () => setStep(s.n);
+      e.onclick = () => { setStep(s.n); select({ kind: "step", ref: s.n }); };
       tl.append(e);
     }
   }
@@ -919,7 +921,7 @@
     $("#right-title").textContent = "Inspector";
     const sel = S.sel; const box = el("div", "insp"); body.append(box);
     if (!sel || !S.st) { box.append(el("div", "empty", "Click any box in a diagram, a file, a function or a mechanism to see what it is, where it lives and how it connects. Double-click opens it.")); return; }
-    const kindName = { function: "Function", class: "Class", table: "Table", module: "Module", file: "File", infra: "Infrastructure", concept: "Mechanism", route: "Entry point", dir: "Folder", package: "Package", layer: "Layer", line: "Code" }[sel.kind] || sel.kind;
+    const kindName = { function: "Function", class: "Class", table: "Table", module: "Module", file: "File", infra: "Infrastructure", concept: "Mechanism", route: "Entry point", dir: "Folder", package: "Package", layer: "Layer", line: "Code", step: "Step", change: "Changed file", component: "Component" }[sel.kind] || sel.kind;
     box.append(el("div", "kind", kindName));
     if (["function", "class", "table", "module"].includes(sel.kind)) {
       box.append(el("h2", null, short(sel.ref)));
@@ -938,6 +940,41 @@
       if (f.secret) box.append(el("div", "chip warn", "secret-looking: never read"));
       const acts = el("div", "actions"); const o = el("button", "btn sm primary", "Open"); o.onclick = () => openFile(sel.ref); acts.append(o);
       if (f.status === "M" || f.status === "A") { const d = el("button", "btn sm", "Diff"); const last = S.st.steps[S.st.steps.length - 1]; d.onclick = () => openDiff(sel.ref, last ? String(last.n) : "live", "live"); acts.append(d); }
+      box.append(acts);
+    } else if (sel.kind === "step") {
+      const live = sel.ref === "live", st = live ? null : S.st.steps.find((x) => x.n === sel.ref);
+      if (!live && !st) return;
+      box.append(el("h2", null, live ? "Work in progress" : st.title));
+      const kv = el("dl", "kv");
+      const row = (k, v) => { if (v == null || v === "") return; kv.append(el("dt", null, k), el("dd", null, String(v))); };
+      if (live) { row("pending changes", S.st.pending.length); row("since step", S.st.steps.length ? S.st.steps[S.st.steps.length - 1].n : 0); }
+      else {
+        const sm = st.summary || {}; row("step", "#" + st.n); row("by", st.source); row("when", `${clock(st.ts)} · ${ago(st.ts)}`);
+        row("files", sm.files); if (sm.added != null) row("lines", `+${sm.added} −${sm.removed}`);
+        for (const k of ["modules", "functions", "classes", "tables"]) { const v = sm[k]; if (v && typeof v === "object") { const t = Object.entries(v).filter(([, n]) => n).map(([w, n]) => `${n} ${w}`).join(", "); row(k, t); } else row(k, v || null); }
+      }
+      box.append(kv);
+      if (st && (st.intent || (st.prompt && st.prompt !== st.title))) { box.append(el("div", "kind", st.intent ? "Intent" : "Prompt")); box.append(el("div", "sysdesc", st.intent || st.prompt)); }
+      if (st && st.title_check && st.title_check !== "ok") box.append(el("div", "chip warn", "⚠ " + st.title_check));
+      const changes = live ? S.st.pending : (st.changes || []);
+      if (changes.length) {
+        box.append(el("div", "kind", "Changed files"));
+        const from = live ? (S.st.steps.length ? String(S.st.steps[S.st.steps.length - 1].n) : "0") : String(Math.max(0, st.n - 1)), to = live ? "live" : String(st.n);
+        for (const ch of changes.slice(0, 40)) { const r = el("div", "ev link"); r.append(el("span", "k " + ch.kind, ch.kind[0].toUpperCase()), el("span", null, ch.path)); if ("added" in ch) r.append(el("span", "meta", `+${ch.added} −${ch.removed}`)); r.onclick = () => { if (!ch.note) openDiff(ch.path, from, to); }; box.append(r); }
+      }
+      const acts = el("div", "actions");
+      if (!live) { const v = el("button", "btn sm primary"); v.append(icon("history"), document.createTextNode("View the project at this step")); v.onclick = () => setStep(st.n); acts.append(v); }
+      box.append(acts);
+    } else if (sel.kind === "change") {
+      const ch = sel.change || {};
+      box.append(el("h2", null, base(sel.ref)), el("div", "loc mono", sel.ref));
+      const kv = el("dl", "kv"); kv.append(el("dt", null, "change"), el("dd", null, ch.kind || "—"));
+      if ("added" in ch) kv.append(el("dt", null, "lines"), el("dd", null, `+${ch.added} −${ch.removed}`));
+      kv.append(el("dt", null, "between"), el("dd", null, `${sel.from === "live" ? "live" : "step " + sel.from} → ${sel.to === "live" ? "live" : "step " + sel.to}`));
+      if (ch.note) kv.append(el("dt", null, "note"), el("dd", null, ch.note)); box.append(kv);
+      const acts = el("div", "actions");
+      if (!ch.note) { const d = el("button", "btn sm primary"); d.append(icon("diff"), document.createTextNode("Diff")); d.onclick = () => openDiff(sel.ref, sel.from, sel.to); acts.append(d); }
+      if (ch.kind !== "deleted" && S.st.files.some((f) => f.path === sel.ref)) { const o = el("button", "btn sm"); o.append(icon("code"), document.createTextNode("Open")); o.onclick = () => openFile(sel.ref); acts.append(o); }
       box.append(acts);
     } else if (sel.kind === "component") {
       const c = S.sysComps && S.sysComps[sel.ref]; if (!c) return;
