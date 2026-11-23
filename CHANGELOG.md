@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix: expanding a long file tree no longer pushes the bottom panel and status bar out of the window; the layout also fits the window at every interface zoom level.
+
 ## 0.3.0
 
 - `mapwright open` no longer lets the browser's console noise reach the terminal.

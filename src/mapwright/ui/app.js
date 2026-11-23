@@ -1084,7 +1084,7 @@
   // IDE-style zoom of the whole interface: Ctrl/Cmd + = / - / 0
   const ZOOMS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75];
   function setZoom(z, quiet) {
-    z = Math.min(1.75, Math.max(0.67, z)); store.set("uizoom", z); $("#ide").style.zoom = z === 1 ? "" : String(z);
+    z = Math.min(1.75, Math.max(0.67, z)); store.set("uizoom", z); $("#ide").style.zoom = z === 1 ? "" : String(z); $("#ide").style.setProperty("--z", String(z)); // height is divided by z so the zoomed layout still fits the window
     if (!quiet) toast("info", `Zoom ${Math.round(z * 100)}%`, z === 1 ? "" : "Ctrl+0 resets"); renderStatus();
   }
   function stepZoom(dir) { const z = store.get("uizoom", 1), i = ZOOMS.findIndex((x) => x >= z - 0.001); setZoom(dir === 0 ? 1 : ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, (i < 0 ? 4 : i) + dir))]); }
