@@ -53,6 +53,7 @@ Other ways to install: `pipx install git+https://github.com/1mystic/Mapwright.gi
 - **Big repo?** `init` suggests folders to ignore (generated code, data shards); `.gitignore` is respected by default.
 - **Use the hosted site:** `mapwright open --web` opens [mapwright.pages.dev](https://mapwright.pages.dev), which talks to your local Mapwright; your code never leaves your machine.
 - **Stop it:** `mapwright down`; remove an agent with `mapwright disconnect`. [All the ways](docs/COMMANDS.md#stopping-mapwright).
+- **Forget or rotate:** `mapwright forget` stops tracking this project (`--purge` also deletes its history); `mapwright token --rotate` writes a new API token, then restart the daemon and run `mapwright open`.
 
 Full guide, including the VS Code extension: [docs/SETUP.md](docs/SETUP.md).
 
@@ -63,8 +64,8 @@ at any earlier step:
 
 | View | Shows | Built from |
 |---|---|---|
-| **System** | The whole system as one abstract, icon-based picture (clients → interface → logic → data → outside services, plus platform); click a component for what is inside it | layers, routes, tables, infrastructure |
 | **Overview** | Counts, what the agent just did, layers, mechanisms, entry points, infrastructure, hotspots, plan, verification | everything below |
+| **System** | The whole system as one abstract, icon-based picture (clients → interface → logic → data → outside services, plus platform); click a component for what is inside it | layers, routes, tables, infrastructure |
 | **Architecture** | Modules grouped into layers (interface, services, data, integrations, UI …), imports, external packages | Python `ast`, JS/TS imports |
 | **Files** | How the project is organised, with added and changed files marked | the file tree |
 | **Classes** | Classes, attributes, methods, inheritance and "uses" links | Python, JS/TS |
@@ -74,6 +75,9 @@ at any earlier step:
 | **Logic** | Every function by complexity, with algorithm hints, and a flowchart of its control flow | Python `ast` (JS/TS: outline), React components and hooks tagged |
 | **Concepts** | Mechanisms in use (29 kinds: caching, retries, queues, auth, rate limiting, ORM, LLM calls …) with evidence in the code | the concept catalog |
 | **Timeline** | Every step: what was asked, files changed with diffs, design changes, verification | the step store |
+
+Overview opens first. The System view pans and zooms like the other diagrams (wheel at the cursor, drag,
+double-click to fit). <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> zooms the whole interface.
 
 Click any box to inspect it; double-click to open the code, the flowchart or the call graph. Search
 everything with <kbd>⇧</kbd><kbd>⇧</kbd>. The bottom panel holds steps, todos, problems and the agent's activity.
@@ -114,6 +118,31 @@ Nothing the agent says is taken at its word:
 
 Everything that does not check out appears under **Problems**, in the agent's own `map`, and in exports.
 
+## Architecture rules
+
+`mapwright.toml` in the project root (commit it) states what the code may depend on:
+
+- **Forbidden imports** between layers or path globs, for example "the UI does not import the data layer".
+- **No import cycles** between modules.
+- **Limits** on complexity per function and on module size.
+
+Violations appear in **Problems** and in the agent's `map`, and are checked at every step. `mapwright check`
+lists them and exits 1 when one is broken, so CI or a pre-commit hook can fail on it. `mapwright rules --init`
+writes a starter file that holds for the code as it is today.
+
+```toml
+[[forbid]]                     # an import that must not exist
+from = "ui"                    # a layer name or a path glob
+to = ["data"]                  # layers or globs
+reason = "UI goes through services"
+
+[limits]
+no_cycles = true               # import cycles between modules
+max_complexity = 25            # per function
+```
+
+Full reference: [Architecture rules in the commands guide](docs/COMMANDS.md#architecture-rules).
+
 ## Validation
 
 Measured on this release (Python 3.13, Linux):
@@ -123,7 +152,8 @@ Measured on this release (Python 3.13, Linux):
 | Real agent run | Claude Code 2.1.325, headless, two turns (85 agent turns in all) building a URL shortener from an empty folder, then adding rate limiting and a stats endpoint, with Mapwright connected through `mapwright init --connect claude-code`. Tool calls: `todo` 23, `step` 9, `claim` 8, `map` 3, `symbol` 1, `catalog` 1, against 26 file writes and edits and **1 file read**. Result: 9 steps with correct computed changes, 11 of 11 todos verified, 8 of 8 claims verified, 0 problems. |
 | What the real run fixed | It surfaced two false alarms, both fixed in this release: tables created in SQL strings were missed (a step about tables was flagged), and camelCase names like `TokenBucketLimiter` did not count as evidence (4 honest claims showed as unverified). Stored warnings are re-checked with the current analysis, so the fixes apply to history too. |
 | Scripted session | 7 turns building an order service; the deliberately dishonest 7th turn produced exactly 3 problems (wrong step title, unearned todo, unbacked claim) and nothing else. |
-| Tests | 23 passing (analysis, flowcharts, infra, tracking, verification, MCP over stdio, hooks, config writers, daemon API, the full session). |
+| Dogfooding | Mapwright maps its own repository (`mapwright init --local --connect claude-code`). Its architecture rules file `mapwright.toml` is committed. |
+| Tests | 125 passing (analysis, flowcharts, infra, tracking, verification, MCP over stdio, hooks, config writers, daemon API, the full session). |
 | Speed | First scan of an 84-file repository 0.8 s; a new process starts warm in 0.01 s (cached by content hash). |
 | Size | No runtime dependencies. Wheel about 1 MB, mostly the bundled diagram renderer. |
 
@@ -152,7 +182,7 @@ is passed through redaction. Nothing is sent anywhere. The optional hosted site 
 - Static analysis: dynamic imports, metaprogramming and tables created at runtime are not seen. Algorithm
   hints are hints.
 - Routes are found for FastAPI, Flask, Express-style routers, Next.js and React Router (config arrays, `<Route>` JSX, `lazyGroup`-style helpers; shown as `PAGE`), not for hand-written `http.server` handlers. Route arrays built dynamically or mounted under a layout in another file show only their own paths.
-- Firestore and Cloud Storage rules (`firestore.rules`, `storage.rules`) and static `collection()`/`doc()` calls appear as `firestore:`/`storage:` collections with allowed operations; paths built at runtime, and Firestore use from Python, are not seen. SQL inside content strings (e.g. quiz text) can still be reported as tables.
+- Firestore and Cloud Storage rules (`firestore.rules`, `storage.rules`) and static `collection()`/`doc()` calls appear as `firestore:`/`storage:` collections with allowed operations; paths built at runtime, and Firestore use from Python, are not seen. SQL inside content strings (e.g. quiz text) can still be reported as tables; SQL found only in tests, examples, scripts or vendored code is kept out of the map.
 - Structure is drawn for Python, JS/TS, SQL and Prisma. Other languages are tracked for changes but not drawn.
 - JS/TS flowcharts are an outline (branches and calls in order), not a full parse.
 - Beta caveats: the UI and the System view's arrows (illustrative, not verified dependencies) are still being polished; Safari blocks the hosted site from reaching `127.0.0.1`, use `mapwright open` there.
