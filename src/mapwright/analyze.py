@@ -524,6 +524,8 @@ def _js_body(text: str, start: int) -> tuple[int, int]:
             if j < 0:
                 break
             j += 1
+        elif ch == "/" and _js_regex_start(text, j):
+            j = _js_regex_end(text, j)
         elif ch == "{":
             depth += 1
         elif ch == "}":
@@ -532,6 +534,40 @@ def _js_body(text: str, start: int) -> tuple[int, int]:
                 return i, j + 1
         j += 1
     return i, n
+
+
+_REGEX_PREV = set("(,=:[!&|?{};+-*%~^<>")
+_REGEX_KW = ("return", "typeof", "case", "do", "else", "in", "of", "void", "yield", "await", "delete", "throw")
+
+
+def _js_regex_start(text: str, j: int) -> bool:
+    """Is the `/` at j the start of a regex literal (not division)? Decided by what precedes it, as JS parsers do."""
+    k = j - 1
+    while k >= 0 and text[k] in " \t":
+        k -= 1
+    if k < 0 or text[k] == "\n" or text[k] in _REGEX_PREV:
+        return True
+    w = k
+    while w >= 0 and (text[w].isalnum() or text[w] in "_$"):
+        w -= 1
+    return text[w + 1:k + 1] in _REGEX_KW
+
+
+def _js_regex_end(text: str, j: int) -> int:
+    """Index of the closing `/` of the regex literal starting at j (classes and escapes respected; one line)."""
+    k, in_class, n = j + 1, False, len(text)
+    while k < n and text[k] != "\n":
+        ch = text[k]
+        if ch == "\\":
+            k += 1
+        elif ch == "[":
+            in_class = True
+        elif ch == "]":
+            in_class = False
+        elif ch == "/" and not in_class:
+            return k
+        k += 1
+    return j  # not a regex after all: treat the slash as a plain character
 
 
 def _js_functions(rel: str, text: str, out: dict) -> None:

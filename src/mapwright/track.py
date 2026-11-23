@@ -38,7 +38,7 @@ try:
 except ImportError:  # Windows: in-process locking only
     fcntl = None
 
-SCHEMA = 5
+SCHEMA = 6  # bump when analysis output changes, so cached per-file results are rebuilt
 _KEY = re.compile(r"^[A-Za-z0-9_.-]{1,120}$")
 _LOCKS: dict[str, threading.RLock] = {}
 COALESCE_SECONDS = 2.0       # auto steps closer together than this are merged (the later turn end picks up the rest)
@@ -236,11 +236,17 @@ class Project:
             for cid, evs in (e.get("concepts") or {}).items():
                 for ev in evs:
                     agg.setdefault(cid, []).append({"file": rel, **ev})
-        self.concepts = {cid: evs[:12] for cid, evs in agg.items()}
+        # a mechanism counts when source code shows it; evidence only from tests/scripts/examples goes to model["aux"]
+        src = {cid: [e for e in evs if A.file_scope(e["file"]) == "source"] for cid, evs in agg.items()}
+        self.concepts = {cid: (src[cid] + [e for e in evs if e not in src[cid]])[:12] for cid, evs in agg.items() if src[cid]}
+        aux_only = {cid: [{"file": e["file"], "line": e["line"], "symbol": e["symbol"], "scope": A.file_scope(e["file"])} for e in evs[:6]]
+                    for cid, evs in agg.items() if not src[cid]}
         self.infra = infra.detect(self.root, self.index, self.text, self.model["modules"])
         self.model["concepts"] = {cid: [{"file": e["file"], "line": e["line"], "symbol": e["symbol"]} for e in evs[:6]]
                                   for cid, evs in self.concepts.items()}
         self.model["infra"] = self.infra
+        if aux_only:
+            self.model.setdefault("aux", {})["concepts"] = aux_only
 
     def ensure(self) -> "Project":
         if self.model is None:

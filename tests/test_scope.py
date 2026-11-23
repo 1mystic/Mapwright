@@ -1,4 +1,5 @@
-from mapwright import analyze as A, concepts as C
+from mapwright import analyze as A
+from mapwright import concepts as C
 
 SQL = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);"
 
@@ -65,3 +66,10 @@ def test_comments_are_not_evidence():
     assert C.detect_file("c.py", py, A.analyze_file("c.py", py)) == {}
     js = "// process.env.X\n/* new WebSocket( */\nlet a = 1;\n"
     assert C.detect_file("c.js", js, A.analyze_file("c.js", js)) == {}
+
+
+def test_js_regex_literals_do_not_break_function_bounds():
+    src = 'function hl(line) {\n  const re = /("[^"]*"|\'[^\']*\')/g;\n  return line.replace(re, "x");\n}\nfunction after() { return 1; }\n'
+    part = A.analyze_js("a.js", src)
+    fns = {f["qual"]: f for f in part["functions"]}
+    assert fns["hl"]["end"] == 4 and "after" in fns

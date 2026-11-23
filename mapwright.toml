@@ -1,0 +1,39 @@
+# Architecture rules for Mapwright: checked at every step, shown in Problems and in the agent's map;
+# `mapwright check` exits non-zero when one is broken (use it in CI). Generated from the code as it is today.
+
+# [layers]
+# "src/app/web/**" = "ui"     # pin paths to layers when the heuristics guess wrong
+
+[[forbid]]
+from = "config"
+to = ["core", "data", "integration", "interface", "service", "ui"]
+reason = "config code must not depend on higher layers"
+
+[[forbid]]
+from = "core"
+to = ["integration", "interface", "service", "ui"]
+reason = "core code must not depend on higher layers"
+
+[[forbid]]
+from = "data"
+to = ["interface", "ui"]
+reason = "data code must not depend on higher layers"
+
+[[forbid]]
+from = "integration"
+to = ["interface", "service", "ui"]
+reason = "integration code must not depend on higher layers"
+
+[[forbid]]
+from = "service"
+to = ["ui"]
+reason = "service code must not depend on higher layers"
+
+[[forbid]]
+from = "util"
+to = ["core", "data", "integration", "interface", "service", "ui"]
+reason = "util code must not depend on higher layers"
+
+[limits]
+no_cycles = true
+max_complexity = 105

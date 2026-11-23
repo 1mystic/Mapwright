@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accuracy: tables, routes and mechanisms found only in tests, examples, scripts or vendored code are kept out of the project map and listed separately; detector pattern tables and comments no longer count as mechanisms; better layers for CLIs and libraries (new `tooling` layer); JS regex literals no longer break function bounds (one 17-line function was read as 299 lines). Cached analyses are rebuilt automatically.
+- Website docs and setup pages are generated from `docs/*.md` (`scripts/mdsite.py`, run on every site build); `scripts/screenshots.py` regenerates the UI screenshots with headless Chromium; the UI accepts `#view=` and `#theme=` in the URL.
+- `mapwright forget [--purge] [--yes]` and `mapwright token [--rotate] [--show]`; ruff configuration with a manual lint job; CONTRIBUTING, SECURITY, issue and PR templates.
 - Architecture rules: `mapwright.toml` with forbidden imports between layers or paths, import-cycle, complexity and module-size limits; checked at every step and shown in Problems and the agent's map; `mapwright check` (exit 1 on violations) and `mapwright rules --init` (a starter that holds today).
 - Docs: how to stop Mapwright (daemon, watch, agent hooks, history, uninstall).
 

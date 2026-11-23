@@ -12,6 +12,8 @@ current folder (or `--path DIR`).
 | `mapwright open [--print] [--json] [--web [--site URL]]` | Open the map in the browser (starts the daemon if needed). `--web` opens the hosted website instead; its page calls your local daemon directly (the token travels in the URL hash, never to the host), and the site is added to `web_origins` |
 | `mapwright up [-d] [--no-watch]` · `mapwright down` | Start (foreground or background) or stop the daemon |
 | `mapwright watch` | Track from the files alone, without the daemon or any agent integration |
+| `mapwright forget [--purge] [--yes]` | Stop tracking this project; `--purge` also deletes its stored history (only inside the Mapwright home; for a project-local home, that directory and its marker) |
+| `mapwright token [--rotate] [--show]` | Where the local API token lives (never printed unless `--show`); `--rotate` writes a new one, then restart the daemon and rerun `mapwright open` |
 | `mapwright doctor` | Check the setup |
 | `mapwright guide` | Quick reference |
 
