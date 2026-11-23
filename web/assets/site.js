@@ -63,3 +63,10 @@ document.querySelectorAll(".tbl td code").forEach((code) => {
   });
   code.replaceChildren(frag);
 });
+
+// light / dark theme toggle (stored; the initial theme is set inline in <head> so the page never flashes)
+document.querySelectorAll(".themetog").forEach((b) => {
+  const sync = () => { const light = document.documentElement.dataset.theme === "light"; b.querySelector("use").setAttribute("href", "assets/icons.svg#" + (light ? "moon" : "sun")); b.setAttribute("aria-label", light ? "Switch to dark theme" : "Switch to light theme"); };
+  b.addEventListener("click", () => { const t = document.documentElement.dataset.theme === "light" ? "dark" : "light"; document.documentElement.dataset.theme = t; try { localStorage.setItem("mw.site.theme", t); } catch (e) {} sync(); });
+  sync();
+});

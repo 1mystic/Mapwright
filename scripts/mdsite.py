@@ -205,10 +205,10 @@ def page(title: str, description: str, current: str, toc: list[tuple[str, str]],
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f'<title>{html.escape(title)} | Mapwright</title><meta name="description" content="{html.escape(description, quote=True)}">'
-        '<link rel="icon" href="assets/mark.svg"><link rel="stylesheet" href="assets/site.css"></head><body><header class="nav"><div class="wrap">\n'
+        '<link rel="icon" href="assets/mark.svg"><link rel="stylesheet" href="assets/site.css"><script>(function(){var d=document.documentElement;d.classList.add(\'js\');try{var t=localStorage.getItem(\'mw.site.theme\')}catch(e){}d.dataset.theme=t||(matchMedia(\'(prefers-color-scheme: light)\').matches?\'light\':\'dark\')})()</script></head><body><header class="nav"><div class="wrap">\n'
         '<a class="brand" href="index.html"><img src="assets/mark.svg" alt="">Mapwright</a>\n'
         f'<nav class="links">{links}</nav>\n'
-        '<span class="grow"></span><a class="btn sm" href="app/?demo">Live demo</a><a class="btn sm primary" href="setup.html">Get started</a></div></header>'
+        '<span class="grow"></span><button class="themetog" type="button" aria-label="Switch to light theme" title="Light or dark theme"><svg class="i"><use href="assets/icons.svg#sun"/></svg></button><a class="btn sm" href="app/?demo">Live demo</a><a class="btn sm primary" href="setup.html">Get started</a></div></header>'
         f'<div class="wrap doc"><aside class="toc">{tocs}</aside><div>{body}</div></div>'
         '<footer><div class="wrap"><a class="brand" href="index.html"><img src="assets/mark.svg" alt="">Mapwright</a><span>Runs on your machine. MIT licensed.</span><span class="grow"></span>\n'
         '<a href="docs.html">Docs</a><a href="setup.html">Setup</a><a href="setup.html#deploy">Deploy</a><a href="app/?demo">Demo</a></div></footer>\n'

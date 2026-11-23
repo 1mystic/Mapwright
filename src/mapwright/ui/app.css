@@ -294,3 +294,5 @@ kbd { font: 11px/1 "JetBrains Mono", ui-monospace, monospace; padding: 2px 5px; 
 
 /* timeline rail: visible in both themes (the light-theme line colour was almost white on white) */
 .tl::before { background: var(--faint); opacity: .45 }
+
+.searchbox > span { transform: translateY(-0.25px) }   /* optical: the label sat ~0.5px low at every scale (measured) */

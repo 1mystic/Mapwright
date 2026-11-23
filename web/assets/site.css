@@ -103,3 +103,16 @@ pre,pre.code{max-width:100%;overflow-x:auto}.tbl{overflow-x:auto}
 .tbl td{overflow-wrap:anywhere}
 .tbl td code{white-space:normal;overflow-wrap:break-word;display:inline;line-height:1.75;-webkit-box-decoration-break:clone;box-decoration-break:clone}
 .tbl th:first-child:nth-last-child(2){width:46%}
+
+/* ---- light theme (toggle in the nav; first visit follows the system preference) */
+html[data-theme=light]{--bg:#f7f8fa;--panel:#ffffff;--panel2:#f2f3f5;--line:#e1e3e8;--text:#1e1f22;--text2:#404249;--muted:#6c707e;--accent:#3574f0;--accent2:#2e64d9;--ok:#3d8f45;--warn:#c27d10;--del:#c94141;color-scheme:light}
+html[data-theme=dark]{color-scheme:dark}
+html[data-theme=light] header.nav{background:rgba(247,248,250,.85)}
+html[data-theme=light] .hero h1 em{background-image:linear-gradient(180deg,#1e1f22 10%,#2e64d9 100%);background-color:rgba(46,100,217,.22);filter:drop-shadow(0 0 18px rgba(53,116,240,.18))}
+html[data-theme=light] .hero h1 em::after{background:linear-gradient(90deg,#2e64d9,#7fa6f6)}
+html[data-theme=light] .window{box-shadow:0 30px 80px -30px rgba(30,31,34,.25)}
+html[data-theme=light] .zoombtn{background:rgba(255,255,255,.88)}
+html[data-theme=light] .ic{background:rgba(53,116,240,.1)}
+.themetog{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;padding:0;border:1px solid var(--line);background:var(--panel);color:var(--text2);cursor:pointer;transition:border-color .15s,color .15s}
+.themetog:hover,.themetog:focus-visible{border-color:var(--muted);color:var(--text);outline:none}.themetog svg{display:block;width:16px;height:16px}
+.doc p code,.doc li code{white-space:nowrap}

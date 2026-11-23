@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Website: light theme with a toggle in the nav on every page (first visit follows the system preference, no flash on load); inline code in docs no longer breaks mid-token.
 - UI: Record step opens an in-app dialog (title and intent) instead of a browser prompt; Ctrl/Cmd + = / - / 0 zooms the whole interface; the System view pans and zooms like the diagrams (wheel at the cursor, drag, double-click to fit); search sits on the right of the header; pills share the control radius; Overview is the first tab again; the timeline rail is visible in the light theme; small-button labels centred (measured in pixels).
 - Accuracy: tables, routes and mechanisms found only in tests, examples, scripts or vendored code are kept out of the project map and listed separately; detector pattern tables and comments no longer count as mechanisms; better layers for CLIs and libraries (new `tooling` layer); JS regex literals no longer break function bounds (one 17-line function was read as 299 lines). Cached analyses are rebuilt automatically.
 - Website docs and setup pages are generated from `docs/*.md` (`scripts/mdsite.py`, run on every site build); `scripts/screenshots.py` regenerates the UI screenshots with headless Chromium; the UI accepts `#view=` and `#theme=` in the URL.
