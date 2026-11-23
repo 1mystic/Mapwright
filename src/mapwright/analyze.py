@@ -592,19 +592,41 @@ def analyze_file(rel: str, text: str) -> dict | None:
 
 
 # ============================================================================ layers
-LAYERS = ("interface", "service", "data", "integration", "ui", "core", "util", "config", "test")
+LAYERS = ("interface", "service", "data", "integration", "ui", "core", "util", "config", "tooling", "test")
 LAYER_TITLES = {"interface": "Interface (API, CLI, handlers)", "service": "Services & domain logic", "data": "Data access & models",
                 "integration": "Integrations & clients", "ui": "User interface", "core": "Core", "util": "Utilities",
-                "config": "Configuration", "test": "Tests"}
-_LAYER_WORDS = [
+                "config": "Configuration", "tooling": "Scripts, examples & vendored code", "test": "Tests"}
+
+# Evidence scope: only "source" files count toward the project-level model (tables, routes, mechanisms).
+_SCOPE_WORDS = [
     ("test", r"(^|/)(tests?|spec|__tests__|e2e)(/|$)|(^|/)test_[^/]*$|_test\.\w+$|\.(spec|test)\.\w+$|(^|/)conftest\.py$"),
-    ("ui", r"(^|/)(components?|pages|views|ui|frontend|client|app/\(.*\)|layouts|screens|widgets)(/|$)|\.(jsx|tsx|vue|svelte)$"),
-    ("interface", r"(^|/)(api|routes?|routers?|controllers?|handlers?|endpoints?|cli|commands?|graphql|resolvers?|server|web)(/|$|\.)|(^|/)(main|app|server|cli|wsgi|asgi|manage)\.\w+$"),
-    ("data", r"(^|/)(models?|db|database|repositor(y|ies)|schemas?|entities|migrations?|orm|dao|store|persistence|prisma)(/|$|\.)"),
+    ("fixture", r"(^|/)(fixtures?|__fixtures__|testdata|mocks?|__mocks__)(/|$)"),
+    ("vendor", r"(^|/)(vendor|vendored|third_party|node_modules|site-packages)(/|$)|\.min\.(js|css)$"),
+    ("example", r"(^|/)(examples?|samples?|demos?)(/|$)"),
+    ("script", r"(^|/)scripts?(/|$)"),
+    ("docs", r"(^|/)docs?(/|$)"),
+]
+
+
+def file_scope(rel: str) -> str:
+    """test | fixture | vendor | example | script | docs | source."""
+    low = rel.replace("\\", "/").lower()
+    for scope, pat in _SCOPE_WORDS:
+        if re.search(pat, low):
+            return scope
+    return "source"
+
+
+_LAYER_WORDS = [
+    ("test", _SCOPE_WORDS[0][1]),
+    ("tooling", r"(^|/)(fixtures?|__fixtures__|testdata|mocks?|__mocks__|vendor|vendored|third_party|node_modules|site-packages|examples?|samples?|demos?|scripts?|docs?)(/|$)|\.min\.(js|css)$"),
+    ("ui", r"(^|/)(web|public|static|assets|www|site)/.*\.(js|mjs|css|html?|ts)$|(^|/)(components?|pages|views|ui|frontend|client|app/\(.*\)|layouts|screens|widgets)(/|$)|\.(jsx|tsx|vue|svelte)$"),
+    ("interface", r"(^|/)(api|routes?|routers?|controllers?|handlers?|endpoints?|cli|commands?|graphql|resolvers?|server|web|mcp|rpc|grpc|daemon)(/|$|\.)|(^|/)(\w+_)?(main|app|server|cli|mcp|daemon|wsgi|asgi|manage|__main__)\.\w+$"),
+    ("data", r"(^|/)(models?|db|database|repositor(y|ies)|schemas?|entities|migrations?|orm|dao|store|persistence|prisma|storage)(/|$|\.)|(^|/)(track|tracker|journal|blobs?|snapshots?|ledger)\.\w+$"),
     ("integration", r"(^|/)(clients?|integrations?|adapters?|gateways?|providers?|external|sdk|connectors?)(/|$|\.)"),
-    ("service", r"(^|/)(services?|domain|core|logic|usecases?|use_cases|workers?|jobs?|tasks?|engine|pipelines?)(/|$|\.)"),
+    ("service", r"(^|/)(services?|domain|core|logic|usecases?|use_cases|workers?|jobs?|tasks?|engine|pipelines?)(/|$|\.)|(^|/)(analy\w*|engine|concepts?|detect\w*|pars\w*|scan\w*|flow|infra\w*|brief|render\w*|export\w*|compiler|planner)\.\w+$"),
     ("config", r"(^|/)(config|settings|conf|env|constants)(/|$|\.)"),
-    ("util", r"(^|/)(utils?|helpers?|lib|common|shared|tools)(/|$|\.)"),
+    ("util", r"(^|/)(utils?|helpers?|lib|common|shared|tools)(/|$|\.)|(^|/)(redact\w*|noise|titles?|ignore|filters?)\.\w+$"),
 ]
 
 
@@ -637,6 +659,7 @@ def link(parts: dict[str, dict]) -> dict:
             suffix.setdefault(sep.join(segs[i:]), mid)
     own = {re.split(r"[./]", s_)[0] for s_ in suffix} | {os.path.basename(os.path.dirname(r)) for r in parts}
     modules, classes, tables, functions, routes = {}, {}, {}, {}, []
+    aux_tables, aux_routes = {}, []
     for rel in sorted(parts):
         p = parts[rel]
         deps, ext = set(), set()
@@ -652,11 +675,15 @@ def link(parts: dict[str, dict]) -> dict:
         if p["lang"] in ("python", "js"):
             modules[p["id"]] = {"file": rel, "lang": p["lang"], "pkg": os.path.dirname(rel) or ".", "deps": sorted(deps),
                                 "ext": sorted(ext), "loc": p["loc"], "sha": p["sha"], "error": bool(p.get("error")),
-                                "layer": layer_of(rel, p), "functions": [], "classes": [c["name"] for c in p["classes"]],
+                                "layer": layer_of(rel, p), "scope": file_scope(rel), "functions": [], "classes": [c["name"] for c in p["classes"]],
                                 "sql_tables": p.get("sql_tables", [])}
         for c in p["classes"]:
             classes[f'{p["id"]}:{c["name"]}'] = {**c, "module": p["id"], "file": rel}
+        aux_file = file_scope(rel) != "source"
         for t in p["tables"]:
+            if aux_file:
+                aux_tables.setdefault(t["name"], {**t, "file": rel, "scope": file_scope(rel)})
+                continue
             if t["name"] in tables:  # the same table in SQL and in an ORM model: keep the first, note the other
                 if t.get("kind") == "firestore":
                     _fs.merge(tables[t["name"]], {**t, "file": rel}, rel)
@@ -670,7 +697,7 @@ def link(parts: dict[str, dict]) -> dict:
             if p["id"] in modules:
                 modules[p["id"]]["functions"].append(f["qual"])
         for r in p.get("routes", []):
-            routes.append({**r, "module": p["id"], "file": rel})
+            (aux_routes if aux_file else routes).append({**r, "module": p["id"], "file": rel, **({"scope": file_scope(rel)} if aux_file else {})})
 
     # ---- call graph: resolve call names to project functions
     by_name: dict[str, list[str]] = {}
@@ -738,7 +765,10 @@ def link(parts: dict[str, dict]) -> dict:
                 touched.add(tlow[t.lower()])
         touched |= {k for k in f.get("fs_refs", []) if k in tables}
         f["tables"] = sorted(touched)
-    return {"modules": modules, "classes": classes, "tables": tables, "functions": functions, "routes": routes}
+    for name in [n for n in aux_tables if n in tables]:   # also modelled in real source: not test-only
+        del aux_tables[name]
+    return {"modules": modules, "classes": classes, "tables": tables, "functions": functions, "routes": routes,
+            "aux": {"tables": aux_tables, "routes": aux_routes}}
 
 
 def _sig(kind: str, node: dict) -> str:

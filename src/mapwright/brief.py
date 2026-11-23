@@ -45,7 +45,7 @@ def project_brief(p, budget: int = 2400, focus: str | None = None) -> str:
             mod = m["modules"][k]
             if focus and not mod["file"].startswith(focus.rstrip("/")):
                 continue
-            if layer == "test" and not focus:
+            if layer in ("test", "tooling") and not focus:
                 continue
             fids = [f"{k}:{q}" for q in mod.get("functions", [])]
             fns = sorted((m["functions"][x] for x in fids if x in m["functions"]),
@@ -55,6 +55,8 @@ def project_brief(p, budget: int = 2400, focus: str | None = None) -> str:
             mods.append(f"{mod['file']} [{layer}] {_cut(syms, 6 if not focus else 30)}" + (f" — {role}" if role else ""))
     if "test" in layers and not focus:
         mods.append(f"tests: {len(layers['test'])} modules")
+    if "tooling" in layers and not focus:
+        mods.append(f"scripts/examples/vendored: {len(layers['tooling'])} modules")
     sections.append(("Modules [layer] key symbols — role", mods))
     if m["tables"]:
         tbl = []
@@ -65,13 +67,28 @@ def project_brief(p, budget: int = 2400, focus: str | None = None) -> str:
                 continue
             tbl.append(f"{t}({_cut(cols, 6)})")
         sections.append(("Tables", tbl))
+    ax = m.get("aux") or {}
+    if ax.get("tables") or ax.get("routes"):
+        also = [f"table {t}({_cut([c['name'] for c in d.get('columns', [])], 4)}) in {d['file']}" for t, d in sorted(ax.get("tables", {}).items())]
+        also += [f"{r['method']} {r['path']} in {r['file']}" for r in ax.get("routes", [])]
+        sections.append(("Also seen in tests/examples", also))
     if p.infra["nodes"]:
         sections.append(("Infra", [f"{n['label']} [{n['kind']}] from {n['sources'][0]}" for n in p.infra["nodes"]]))
     if p.concepts:
-        sections.append(("Mechanisms (detected)", [f"{cid}: {_cut(sorted({e['file'] for e in evs}), 2)}" for cid, evs in p.concepts.items()]))
+        src, aux = {}, {}
+        for cid, evs in p.concepts.items():
+            real = [e for e in evs if A.file_scope(e["file"]) == "source"]
+            if real:
+                src[cid] = real
+            else:
+                aux[cid] = evs
+        if src:
+            sections.append(("Mechanisms (detected)", [f"{cid}: {_cut(sorted({e['file'] for e in evs}), 2)}" for cid, evs in src.items()]))
+        if aux:
+            sections.append(("Also seen only in tests/examples/scripts", [f"{cid}: {_cut(sorted({e['file'] for e in evs}), 2)}" for cid, evs in aux.items()]))
     algos = [f"{', '.join(h for h in f['hints'] if h != 'async I/O')}: {fid.split(':')[-1]} ({f['file']})"
              for fid, f in m["functions"].items() if any(h not in ("async I/O", "database query", "HTTP call") for h in f["hints"])
-             and A.layer_of(f["file"]) != "test"]
+             and A.layer_of(f["file"]) not in ("test", "tooling")]
     if algos:
         sections.append(("Algorithms (hints)", algos))
     todos = [f"{t['id']} {t['text']}" for t in st["todos"] if t["status"] == "open"]

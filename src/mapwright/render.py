@@ -60,7 +60,7 @@ def architecture(model: dict, marks: dict, prev: dict | None = None, show_tests:
     mk = marks.get("modules", {})
     if not mods:
         return {"mermaid": 'flowchart LR\n  empty["No Python or JS/TS modules yet"]', "nodes": {}, "note": ""}
-    tests = {k for k, m in mods.items() if m.get("layer") == "test"}
+    tests = {k for k, m in mods.items() if m.get("layer") in ("test", "tooling")}
     trivial = {k for k, m in mods.items() if m["file"].endswith("__init__.py") and m["loc"] <= 3 and not m.get("functions") and not m.get("classes")
                and not any(k in o["deps"] for o in mods.values())}
     shown = {k: m for k, m in mods.items() if (show_tests or k not in tests) and k not in trivial}
