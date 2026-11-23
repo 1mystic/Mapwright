@@ -15,7 +15,8 @@ import time
 
 from . import analyze as A
 from . import concepts as C
-from . import config, ignore as ignore_mod, render
+from . import config, render
+from . import ignore as ignore_mod
 from . import rules as R
 
 LAYER_ORDER = list(A.LAYERS)

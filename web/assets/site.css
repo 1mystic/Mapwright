@@ -132,3 +132,11 @@ section p.sub code,section p.note code{white-space:nowrap}
 @media(max-width:860px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 footer a:not(.brand){color:var(--text2)}footer a:not(.brand):hover{color:var(--text);text-decoration:none}
 .card p code{white-space:nowrap}
+
+/* ---- nav: one spacing system (brand · links · actions) */
+header.nav .wrap{gap:0}
+nav.links{gap:2px;margin-left:28px}
+nav.links a{display:inline-flex;align-items:center;height:32px;padding:0 10px;border-radius:8px;line-height:1}
+nav.links a:hover{background:var(--panel)}nav.links a.on{background:var(--panel)}
+header.nav .themetog,header.nav .btn.sm{margin-left:8px}
+@media(max-width:640px){header.nav .themetog,header.nav .btn.sm{margin-left:8px}}
