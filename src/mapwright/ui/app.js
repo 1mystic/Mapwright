@@ -73,7 +73,7 @@
   const LAYER_COLOR = { interface: "#3574f0", ui: "#2aacb8", service: "#5fb865", core: "#9b8cff", data: "#c77dbb", integration: "#e5a13e", util: "#868a91", config: "#b3ae60", test: "#6f737a" };
   const S = {
     projects: [], key: params.get("p") || store.get("key", null), st: null, model: null, modelFor: null, version: -1,
-    step: "live", base: "auto", tabs: store.get("tabs", []), active: store.get("active", "system"), left: store.get("left", "project"),
+    step: "live", base: "auto", tabs: store.get("tabs", []), active: /^(system|overview|logic|concepts|timeline|d:[a-z]+)$/.test(params.get("view") || "") ? params.get("view") : store.get("active", "system"), left: store.get("left", "project"),
     leftOpen: store.get("leftOpen", true), rightOpen: store.get("rightOpen", true), bottomOpen: store.get("bottomOpen", true), btab: store.get("btab", "steps"),
     sel: null, settings: null, integ: null, brief: null, expanded: new Set(store.get("expanded", [])), view: {}, fnFilter: "", fnSel: null, conn: "connecting",
   };
@@ -102,7 +102,7 @@
 
   // ------------------------------------------------------------------ boot & polling
   async function boot() {
-    setTheme(store.get("theme", "dark"));
+    setTheme(["dark", "light"].includes(params.get("theme")) ? params.get("theme") : store.get("theme", "dark"));
     wire();
     if (!DEMO && !token) { S.conn = "token"; renderAll(); authBox("missing"); return; }
     try {
@@ -114,6 +114,7 @@
     } catch (e) { S.conn = e.status === 401 ? "token" : "offline"; renderAll(); if (e.status === 401) authBox("rejected"); else offlineBox(); return; }
     if (!S.key) { renderAll(); welcome(); return; }
     await load(true);
+    if (params.get("view") === "settings") settings(); // #view=settings opens the Settings dialog (used by scripts/screenshots.py)
     setInterval(poll, 1500);
   }
   async function poll() {
