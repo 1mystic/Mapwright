@@ -147,3 +147,13 @@ def test_ping_reports_home(proj, monkeypatch):
         assert cli.daemon_state() == "other"
     finally:
         d.shutdown()
+
+
+def test_open_browser_silences_browser_output(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli.shutil if hasattr(cli, "shutil") else __import__("shutil"), "which", lambda name: "/usr/bin/xdg-open")
+    monkeypatch.setattr(cli.sys, "platform", "linux")
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda args, **kw: calls.append((args, kw)))
+    cli.open_browser("http://127.0.0.1:7979/#t=x")
+    (args, kw), = calls
+    assert args[0] == "/usr/bin/xdg-open" and kw["stderr"] is cli.subprocess.DEVNULL and kw["stdout"] is cli.subprocess.DEVNULL

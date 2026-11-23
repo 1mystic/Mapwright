@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
+- `mapwright open` no longer lets the browser's console noise reach the terminal.
 - System view timelapse: replays the architecture step by step to LIVE (play/pause, slider, 1x/2x, Space; respects reduced motion).
 - Estimated token savings: `map`/`find`/`symbol` answers compared with reading the files they summarise, shown in the Overview and status bar and in `state().savings` (labelled as an estimate).
 - Custom select menus in the UI (themed list, check on the current item, keyboard navigation, filter for long lists) replace the native selects.

@@ -224,8 +224,29 @@ def cmd_open(a):
     print(url)
     print(c("the link carries your local token; don't share it", DIM))
     if not a.print:
-        import webbrowser
+        open_browser(url)
+
+
+def open_browser(url: str) -> None:
+    """Open the URL without letting the browser's own console noise (e.g. Chromium's "zygote … Broken pipe") reach the terminal."""
+    import shutil
+    import webbrowser
+    opener = None if sys.platform.startswith(("win", "darwin")) else shutil.which("xdg-open")
+    if opener:
+        try:
+            subprocess.Popen([opener, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            return
+        except OSError:
+            pass
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    saved = os.dup(2)
+    try:
+        os.dup2(devnull, 2)  # browsers started by webbrowser inherit stderr
         webbrowser.open(url)
+    finally:
+        os.dup2(saved, 2)
+        os.close(saved)
+        os.close(devnull)
 
 
 def cmd_status(a):
