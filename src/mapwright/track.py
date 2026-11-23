@@ -566,6 +566,11 @@ class Project:
         for rel, e in self.cache.items():
             if (e.get("part") or {}).get("error"):
                 problems.append({"kind": "parse", "status": "error", "text": f"{rel} does not parse (the agent may be mid-edit)"})
+        try:
+            from . import rules as R
+            problems += R.problems(self.root, self.model)
+        except Exception as e:  # a broken rules file must not break the map
+            problems.append({"kind": "rule", "status": "error", "text": f"rules could not be checked: {e}"})
         return {**ann, "problems": problems}
 
     def todo_add(self, text: str, by: str = "agent") -> dict:

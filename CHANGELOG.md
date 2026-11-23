@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Architecture rules: `mapwright.toml` with forbidden imports between layers or paths, import-cycle, complexity and module-size limits; checked at every step and shown in Problems and the agent's map; `mapwright check` (exit 1 on violations) and `mapwright rules --init` (a starter that holds today).
 - Docs: how to stop Mapwright (daemon, watch, agent hooks, history, uninstall).
 
 ## 0.2.0

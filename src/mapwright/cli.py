@@ -351,6 +351,50 @@ def cmd_problems(a):
         print(f"{c('⚠', AMBER)} [{x['kind']}] {x['text']}")
 
 
+def cmd_check(a):
+    from . import rules as R
+    p = project(a)
+    rules, err = R.load(p.root)
+    if err:
+        print(c(f"✖ {err}", RED), file=sys.stderr)
+        sys.exit(2)
+    if rules is None:
+        print(c(f"no {R.FILE} in {p.root}; create one with: mapwright rules --init", DIM))
+        sys.exit(0)
+    found = R.check(p.model, rules)
+    if a.json:
+        print(json.dumps({"violations": found, "ok": not found}))
+    else:
+        for v in found:
+            print(f"{c('✖', RED)} [{v['rule']}] {v['text']}")
+        print(c(f"✓ {R.FILE}: every rule holds", GREEN) if not found else c(f"{len(found)} violation(s)", RED))
+    sys.exit(1 if found else 0)
+
+
+def cmd_rules(a):
+    from . import rules as R
+    p = project(a)
+    path = os.path.join(p.root, R.FILE)
+    if a.init:
+        if os.path.exists(path) and not a.force:
+            sys.exit(f"{path} exists; use --force to overwrite")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(R.starter(p.model))
+        print(f"{c('✓', GREEN)} wrote {path} (holds for the code as it is today; edit it, commit it)")
+        return
+    rules, err = R.load(p.root)
+    if err or rules is None:
+        print(err or c(f"no {R.FILE}; create one with: mapwright rules --init", DIM))
+        return
+    print(f"{c('◆', BLUE)} {path}")
+    for r in rules.get("forbid") or []:
+        print(f"  forbid {r.get('from')} → {r.get('to')}" + (c(f"  ({r['reason']})", DIM) if r.get("reason") else ""))
+    for k, v in (rules.get("limits") or {}).items():
+        print(f"  {k} = {json.dumps(v)}")
+    for g, lay in (rules.get("layers") or {}).items():
+        print(f"  layer {g} = {lay}")
+
+
 def cmd_diagram(a):
     from .server import Daemon
     p = project(a)
@@ -551,6 +595,11 @@ def main(argv=None) -> int:
     x.add_argument("--label")
     add("catalog", cmd_catalog, "Concept ids for claims.", path=False)
     add("problems", cmd_problems, "Claims, notes, links and todos that do not check out.")
+    x = add("check", cmd_check, "Check the architecture rules in mapwright.toml (exit 1 on violations; for CI).")
+    x.add_argument("--json", action="store_true")
+    x = add("rules", cmd_rules, "Show the architecture rules, or write a starter mapwright.toml.")
+    x.add_argument("--init", action="store_true", help="write a mapwright.toml that holds for the code as it is today")
+    x.add_argument("--force", action="store_true")
     x = add("diagram", cmd_diagram, "Print a diagram as Mermaid.")
     x.add_argument("kind", choices=list(render.KINDS))
     x.add_argument("--step", type=int)

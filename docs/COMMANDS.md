@@ -53,6 +53,8 @@ print-only: `cline`, `zed`, `jetbrains`, `any`.
 | `mapwright steps` | Every step with its changes and design delta |
 | `mapwright changes [--step N] [--diff]` | File changes since the last step, or in step N |
 | `mapwright step "TITLE" [--intent "WHY"]` | Close a step yourself |
+| `mapwright check [--json]` | Check the architecture rules in `mapwright.toml`; exits 1 when one is broken (for CI and pre-commit) |
+| `mapwright rules [--init [--force]]` | Show the rules, or write a starter `mapwright.toml` that holds for the code as it is today |
 | `mapwright problems` | Claims, notes, links, todos and step titles that do not check out |
 | `mapwright todo add TEXT` · `todo done ID --evidence SYMBOL` · `todo drop ID` · `todo list` | The plan |
 
@@ -69,6 +71,28 @@ print-only: `cline`, `zed`, `jetbrains`, `any`.
 | `mapwright note SYMBOL ROLE…` | `note` | One-line role, shown on the map |
 | `mapwright link FROM TO [--label …]` | `link` | A relation the code cannot show |
 | `mapwright catalog` | `catalog` | Concept ids |
+
+## Architecture rules
+
+`mapwright.toml` in the project root (commit it) turns the map into a guardrail. Rules are checked at every step;
+violations appear in Problems, in the agent's `map`, in exports, and make `mapwright check` exit non-zero.
+
+```toml
+[layers]                       # optional: pin paths to layers when the heuristics guess wrong
+"src/app/web/**" = "ui"
+
+[[forbid]]                     # an import that must not exist
+from = "ui"                    # a layer name or a path glob
+to = ["data"]                  # layers or globs
+except = ["src/app/db/types.py"]
+reason = "UI goes through services"
+
+[limits]
+no_cycles = true               # import cycles between modules
+max_complexity = 25            # per function
+max_module_lines = 800
+# include_tests = true         # tests are skipped unless this is set
+```
 
 ## Diagrams and export
 
