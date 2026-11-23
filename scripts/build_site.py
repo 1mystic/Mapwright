@@ -110,6 +110,9 @@ def main() -> None:
         (WEB / "img").mkdir(exist_ok=True)
         shutil.copy2(img, WEB / "img" / img.name)
     shutil.rmtree(home, ignore_errors=True)
+    import mdsite
+
+    mdsite.build(WEB)  # web/docs.html and web/setup.html are generated from docs/*.md
     print(f"web/app/demo.json: {len(bundle)} responses, {len(text) // 1024} KB · site ready in {WEB}")
 
 
