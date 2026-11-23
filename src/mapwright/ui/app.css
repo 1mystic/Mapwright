@@ -312,3 +312,13 @@ kbd { font: 11px/1 "JetBrains Mono", ui-monospace, monospace; padding: 2px 5px; 
 @keyframes syspulse { 0% { stroke: var(--mod); stroke-width: 5 } 100% { stroke-width: 1.2 } }
 .stat.saved b { color: var(--ok) } .stat.saved { cursor: help }
 @media (prefers-reduced-motion: reduce) { .sysinner, .sysedge { transition: none } .sysnode.enter .sysinner, .sysnode.pulse .sysbox { animation: none } }
+
+/* ---- custom select */
+.select.dd { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; background-image: none; color: var(--text); cursor: pointer; max-width: 320px; line-height: 1 }
+.select.dd .ddl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: 1 } .select.dd svg.i { color: var(--muted); width: 14px; height: 14px }
+.select.dd:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--sel-soft) }
+.ddm { padding: 4px; outline: none } .ddm .ddlist { display: flex; flex-direction: column; gap: 1px }
+.ddm .mi { padding: 0 10px 0 6px; height: 28px } .ddm .mi .ck { width: 16px; display: grid; place-items: center } .ddm .mi .ck svg.i { width: 14px; height: 14px }
+.ddm .mi.on:not(.act) { color: var(--accent-2) }
+.ddm .ddf { width: calc(100% - 4px); margin: 2px 2px 6px; height: var(--ctl-sm); padding: 0 8px; border-radius: var(--rad); border: 1px solid var(--line); background: var(--panel-2); outline: none }
+.ddm .ddf:focus { border-color: var(--accent) }

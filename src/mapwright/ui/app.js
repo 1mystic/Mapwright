@@ -624,20 +624,17 @@
   // ---- diagrams
   function vbar(title) { const b = el("div", "vbar"); b.append(el("span", "title", title)); return b; }
   function stepSelect(onchange) {
-    const s = el("select", "select"); s.title = "Highlight what changed compared with";
     const opts = [["auto", "vs previous step"], ["none", "no highlighting"], ...S.st.steps.map((x) => [String(x.n), `vs step ${x.n}: ${x.title.slice(0, 40)}`])];
-    for (const [v, t] of opts) { const o = el("option", null, t); o.value = v; s.append(o); }
-    s.value = S.base; s.onchange = () => { S.base = s.value; onchange(); }; return s;
+    const s = selectBox(opts, S.base, "Highlight what changed compared with"); s.onchange = () => { S.base = s.value; onchange(); }; return s;
   }
   async function diagramView(v, kind, focus) {
     const bar = vbar(DTITLE[kind] || kind); v.append(bar);
     const tabId = S.active; const vs = S.view[tabId] = S.view[tabId] || { k: 1, x: 20, y: 20, src: false, focus: focus || null };
     if (kind === "processes" || kind === "calls") {
-      const sel = el("select", "select"); sel.title = kind === "processes" ? "One entry point" : "Centre on a function";
-      sel.append(Object.assign(el("option", null, kind === "processes" ? "all entry points" : "most connected functions"), { value: "" }));
-      if (kind === "processes") for (const r of S.st.routes) { const o = el("option", null, `${r.method} ${r.path}`); o.value = `${r.method} ${r.path}`; sel.append(o); }
-      else model().then((m) => { Object.entries(m.functions).filter(([, f]) => f.callers.length + f.callees.length).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 400).forEach(([fid]) => { const o = el("option", null, short(fid) + "()"); o.value = fid; sel.append(o); }); sel.value = vs.focus || ""; });
-      sel.value = vs.focus || ""; sel.onchange = () => { vs.focus = sel.value || null; vs.fit = true; renderView(); };
+      const first = ["", kind === "processes" ? "all entry points" : "most connected functions"];
+      const sel = selectBox([first, ...(kind === "processes" ? S.st.routes.map((r) => [`${r.method} ${r.path}`, `${r.method} ${r.path}`]) : [])], vs.focus || "", kind === "processes" ? "One entry point" : "Centre on a function");
+      if (kind !== "processes") model().then((m) => { sel.setOptions([first, ...Object.entries(m.functions).filter(([, f]) => f.callers.length + f.callees.length).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 400).map(([fid]) => [fid, short(fid) + "()"])]); });
+      sel.onchange = () => { vs.focus = sel.value || null; vs.fit = true; renderView(); };
       bar.append(sel);
     }
     if (kind === "processes") { const cg = el("button", "btn sm", "Call graph"); cg.onclick = () => openTab({ id: "d:calls", title: "Call graph", icon: "graph" }); bar.append(cg); }
@@ -719,8 +716,7 @@
   async function logicView(v) {
     const sp = el("div", "split"), side = el("div", "side"), content = el("div", "content"); sp.append(side, content); v.append(sp);
     const f = el("div", "filter"); f.append(icon("search")); const inp = el("input"); inp.placeholder = "Filter functions"; inp.value = S.fnFilter; f.append(inp);
-    const sort = el("select", "select"); sort.style.margin = "0 8px 8px"; for (const [k, t] of [["cx", "Most complex first"], ["hints", "Algorithms first"], ["calls", "Most connected first"], ["name", "By name"]]) { const o = el("option", null, t); o.value = k; sort.append(o); }
-    sort.value = S.fnSort || "cx"; side.append(f, sort);
+    const sort = selectBox([["cx", "Most complex first"], ["hints", "Algorithms first"], ["calls", "Most connected first"], ["name", "By name"]], S.fnSort || "cx", "Order functions"); sort.style.margin = "0 8px 8px"; side.append(f, sort);
     const list = el("div", "pbody"); side.append(list);
     const m = await model(); if (S.active !== "logic") return;
     const all = Object.entries(m.functions).filter(([, fn]) => !/(^|\/)tests?\//.test(fn.file));
@@ -1038,6 +1034,46 @@
   function toast(kind, title, text) {
     const t = el("div", "toast " + kind); t.append(icon(kind === "ok" ? "check" : kind === "err" ? "warning" : "info")); const b = el("div"); b.append(el("b", null, title), el("span", null, text || "")); t.append(b);
     $("#toasts").append(t); setTimeout(() => t.remove(), 4500);
+  }
+  // Custom select: a button that opens a themed list (check on the current item, arrows/Enter/Esc, a filter for long lists).
+  // Same surface as <select> for callers: .value, .onchange, plus .setOptions([[value, label], ...]).
+  function selectBox(options, value, title) {
+    const b = el("button", "select dd"); b.type = "button"; if (title) b.title = title; b.setAttribute("aria-haspopup", "listbox");
+    const lbl = el("span", "ddl"); b.append(lbl, icon("chevron-down"));
+    let opts = options || [], cur = value;
+    const sync = () => { const o = opts.find(([v]) => String(v) === String(cur)) || opts[0]; lbl.textContent = o ? o[1] : ""; };
+    Object.defineProperty(b, "value", { get: () => cur, set: (v) => { cur = v; sync(); } });
+    b.setOptions = (o) => { opts = o; sync(); };
+    b.onclick = () => {
+      closeMenus(); const r = b.getBoundingClientRect(); const m = el("div", "menu ddm"); m.setAttribute("role", "listbox");
+      m.style.left = r.left + "px"; m.style.top = r.bottom + 4 + "px"; m.style.minWidth = Math.max(r.width, 200) + "px";
+      const scrim = el("div"); scrim.style.cssText = "position:fixed;inset:0;z-index:39"; scrim.onclick = closeMenus; scrim.dataset.menu = m.dataset.menu = "1";
+      let filter = null, act = Math.max(0, opts.findIndex(([v]) => String(v) === String(cur))), shown = opts;
+      if (opts.length > 12) { filter = el("input", "ddf"); filter.placeholder = "Filter…"; m.append(filter); }
+      const list = el("div", "ddlist"); m.append(list);
+      const pick = (v) => { closeMenus(); if (String(v) !== String(cur)) { cur = v; sync(); if (b.onchange) b.onchange(); } b.focus(); };
+      const draw = () => {
+        const q = filter ? filter.value.toLowerCase() : ""; shown = q ? opts.filter(([, t]) => t.toLowerCase().includes(q)) : opts; act = Math.min(act, Math.max(0, shown.length - 1));
+        list.replaceChildren(); shown.slice(0, 500).forEach(([v, t], i) => {
+          const mi = el("div", "mi" + (i === act ? " act" : "") + (String(v) === String(cur) ? " on" : "")); mi.setAttribute("role", "option");
+          const ck = el("span", "ck"); if (String(v) === String(cur)) ck.append(icon("check")); mi.append(ck, el("span", null, t)); mi.onclick = () => pick(v); list.append(mi);
+        });
+        if (!shown.length) list.append(el("div", "mh", "No match"));
+        list.querySelector(".act")?.scrollIntoView({ block: "nearest" });
+      };
+      m.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") { act = Math.min(shown.length - 1, act + 1); draw(); e.preventDefault(); }
+        else if (e.key === "ArrowUp") { act = Math.max(0, act - 1); draw(); e.preventDefault(); }
+        else if (e.key === "Enter" && shown[act]) { pick(shown[act][0]); e.preventDefault(); }
+        else if (e.key === "Escape") { closeMenus(); b.focus(); e.preventDefault(); e.stopPropagation(); }
+      });
+      if (filter) filter.oninput = () => { act = 0; draw(); };
+      document.body.append(scrim, m); draw();
+      const over = m.getBoundingClientRect().bottom - innerHeight + 8; if (over > 0) m.style.top = Math.max(8, r.top - m.offsetHeight - 4) + "px";
+      (filter || m).focus(); if (!filter) m.tabIndex = -1, m.focus();
+    };
+    b.addEventListener("keydown", (e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); b.click(); } });
+    sync(); return b;
   }
   function menu(anchor, items) {
     closeMenus(); const m = el("div", "menu"); const r = anchor.getBoundingClientRect(); m.style.left = r.left + "px"; m.style.top = r.bottom + 4 + "px";

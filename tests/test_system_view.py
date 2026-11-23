@@ -26,3 +26,9 @@ def test_timelapse_and_savings_markers():
     for m in ("function timelapse(", "drawSystemMap(", "prefers-reduced-motion", "S.sysPlayer.toggle()", "savingsTip(", "tokens saved"):
         assert m in js, m
     assert ".sysnode.enter" in css and ".sysnode.pulse" in css and ".sysnode.gone" in css and "prefers-reduced-motion" in css
+
+
+def test_no_native_selects_custom_dropdown_instead():
+    js = (UI / "app.js").read_text()
+    assert 'el("select"' not in js and "function selectBox(" in js
+    assert ".select.dd" in (UI / "app.css").read_text()

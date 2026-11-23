@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- System view timelapse: replays the architecture step by step to LIVE (play/pause, slider, 1x/2x, Space; respects reduced motion).
+- Estimated token savings: `map`/`find`/`symbol` answers compared with reading the files they summarise, shown in the Overview and status bar and in `state().savings` (labelled as an estimate).
+- Custom select menus in the UI (themed list, check on the current item, keyboard navigation, filter for long lists) replace the native selects.
 - `mapwright report`: reviewer-ready Markdown or JSON summary of architecture changes since a step or git ref (counts, modules by layer, Mermaid diagram of changed modules, routes, tables, hotspots, rule status, verification), plus a manual PR-comment workflow.
 - Live feedback: right after an edit, the Claude Code hook tells the agent about rule violations and import cycles that edit introduced, so it can fix them in the same turn (setting `live_feedback`, default on; about 10 ms warm).
 - Landing page: one spacing scale for every section, a 5x2 views grid, consistent section layouts, cleaner copy.
