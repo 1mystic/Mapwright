@@ -96,6 +96,12 @@ max_module_lines = 800
 # include_tests = true         # tests are skipped unless this is set
 ```
 
+**Live feedback.** When `mapwright.toml` exists, the Claude Code hook refreshes the project after each edit and compares
+the rule violations with the state before. If the edit introduced new ones, the agent gets one short line of context
+(at most 3 items), for example `Mapwright: this edit broke a rule: src/ui/v.py [ui] imports src/db/m.py [data]: UI goes
+through services. Fix it or explain.` Each violation is reported once; ones that existed before are never reported; the
+hook never blocks and stays silent when nothing is new. Turn it off with `mapwright settings live_feedback false`.
+
 ## Diagrams and export
 
 | Command | What it does |
@@ -116,6 +122,7 @@ max_module_lines = 800
 | `brief_budget` | `2400` | Characters in `map` / `brief` (about 600 tokens) |
 | `max_files` | `5000` | Cap on tracked files. When hit, `init`, `doctor` and `state` (`truncated_info`) show files seen and the folders that used the budget |
 | `web_origins` | `["https://mapwright.pages.dev"]` | Hosted sites allowed to call this daemon from the browser. Exact origins only (https, or loopback http); the token is still required |
+| `live_feedback` | `true` | After an edit, the Claude Code hook tells the agent about architecture-rule violations or import cycles that the edit introduced |
 | `respect_gitignore` | `true` | Skip files matched by `.gitignore` (root and nested) and `.git/info/exclude` |
 | `ignore` | `[]` | Extra names or gitignore-style patterns, e.g. `["public/question-bank/**", "*.pdf", "apps/*/dist"]`. Plain names match at any depth; `!pattern` re-includes something `.gitignore` excludes |
 | `redact` | `true` | Redact secrets in code shown in the UI |

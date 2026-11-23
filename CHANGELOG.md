@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Live feedback: right after an edit, the Claude Code hook tells the agent about rule violations and import cycles that edit introduced, so it can fix them in the same turn (setting `live_feedback`, default on; about 10 ms warm).
+- Landing page: one spacing scale for every section, a 5x2 views grid, consistent section layouts, cleaner copy.
 - Website: light theme with a toggle in the nav on every page (first visit follows the system preference, no flash on load); inline code in docs no longer breaks mid-token.
 - UI: Record step opens an in-app dialog (title and intent) instead of a browser prompt; Ctrl/Cmd + = / - / 0 zooms the whole interface; the System view pans and zooms like the diagrams (wheel at the cursor, drag, double-click to fit); search sits on the right of the header; pills share the control radius; Overview is the first tab again; the timeline rail is visible in the light theme; small-button labels centred (measured in pixels).
 - Accuracy: tables, routes and mechanisms found only in tests, examples, scripts or vendored code are kept out of the project map and listed separately; detector pattern tables and comments no longer count as mechanisms; better layers for CLIs and libraries (new `tooling` layer); JS regex literals no longer break function bounds (one 17-line function was read as 299 lines). Cached analyses are rebuilt automatically.
