@@ -7,3 +7,4 @@ build/
 .venv/
 web/app/
 node_modules/
+.mapwright/
