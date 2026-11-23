@@ -1,7 +1,7 @@
 """Hook client: agents report prompts, tool calls and turn ends here (Claude Code command hooks,
 the opencode plugin, or anything that can run a command with JSON on stdin).
 
-It never blocks the agent and never prints to stdout: whatever goes wrong, it exits 0. A turn end
+It never blocks the agent and never prints to stdout (except the live-feedback JSON line after an edit that broke a rule): whatever goes wrong, it exits 0. A turn end
 closes a step by itself when the auto-step setting allows it, so steps happen even if the agent
 never calls the `step` tool.
 """
@@ -54,6 +54,26 @@ def read_only_bash(cmd: str) -> bool:
     return True
 
 
+def _live(p) -> None:
+    """Print one compact additionalContext line when this edit introduced new violations. Never raises."""
+    try:
+        new = p.live_check()
+        if not new:
+            return
+        msg = "Mapwright: this edit broke a rule: " + "; ".join(t[:110] for t in new) + ". Fix it or explain."
+        if len(msg) > 300:
+            msg = msg[:297] + "..."
+        sys.stdout.write(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": msg}}) + "\n")
+        sys.stdout.flush()
+    except Exception as e:
+        try:
+            from . import config
+            with open(config.home() / "hook-errors.log", "a") as fh:
+                fh.write(f"live_feedback {type(e).__name__}: {e}\n")
+        except Exception:
+            pass
+
+
 def handle(agent: str, payload: dict) -> None:
     from .track import open_project
     cwd = payload.get("cwd") or payload.get("directory") or os.getcwd()
@@ -81,13 +101,24 @@ def handle(agent: str, payload: dict) -> None:
             root = p.root + "/"
             files = [os.path.relpath(f, p.root) if os.path.isabs(f) and f.startswith(root) else f for f in _files(ti)]
             p.record("tool", tool=tool, files=files, agent=agent, session=session)
+            if agent == "claude-code" and config.settings().get("live_feedback", True):
+                _live(p)
     elif ev in ("Stop", "SessionEnd", "turn_end", "idle"):
         if payload.get("stop_hook_active") or payload.get("agent_id") or payload.get("agent_type"):
             return  # a Stop re-fired by a Stop hook, or one that comes from inside a subagent
         final = ev == "SessionEnd"
         with p.locked():  # record + step as one unit: concurrent hook processes cannot interleave
             p.record("turn_end", agent=agent, session=session)
-            p.maybe_auto_step(session=str(session), final=final)
+            note = ""
+            if config.settings().get("live_feedback", True):
+                try:
+                    p.refresh()
+                    ov = p.open_violations()
+                    if ov:
+                        note = f"{len(ov)} open rule violation{'s' if len(ov) != 1 else ''}: {ov[0][:120]}"
+                except Exception:
+                    note = ""
+            p.maybe_auto_step(session=str(session), final=final, note=note)
 
 
 def main(argv: list[str] | None = None) -> int:
