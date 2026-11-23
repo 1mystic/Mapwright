@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import posixpath
 import re
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 LOCKFILES = {
     "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb", "bun.lock", "poetry.lock",

@@ -1,11 +1,9 @@
-import json
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 import pytest
 
-from mapwright import config
 from mapwright.server import Daemon
 
 UI = Path(__file__).resolve().parents[1] / "src" / "mapwright" / "ui"

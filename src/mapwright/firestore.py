@@ -44,7 +44,6 @@ def analyze_rules(rel: str, text: str) -> dict:
     stack: list[str | None] = []  # the collection path owned by each open block, None for other braces
     base: list[str] = []          # composed path prefix at each open block
     tables: dict[str, dict] = {}
-    cur_path = ""
     for m in _RULE_TOKEN.finditer(clean):
         tok = m.group(0)
         if m.group(1):

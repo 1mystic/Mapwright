@@ -118,6 +118,18 @@ def token() -> str:
     return f.read_text().strip()
 
 
+def rotate_token() -> str:
+    """Replace the token with a fresh one (file mode 0600). Running daemons keep the old value until restarted."""
+    f = home() / "token"
+    tok = secrets.token_urlsafe(32)
+    tmp = f.with_name(f"token.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(tok)
+    os.replace(tmp, f)
+    return tok
+
+
 def read_json(path: Path | str, default):
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
