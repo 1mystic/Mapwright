@@ -276,5 +276,21 @@ kbd { font: 11px/1 "JetBrains Mono", ui-monospace, monospace; padding: 2px 5px; 
 .seg { width: max-content; max-width: 100%; justify-self: start; align-self: start }
 .seg button { flex: none; white-space: nowrap }
 .btn, .seg button, .agent-pill { padding-top: 1px }
-.btn.sm { padding-top: 1px }
+.btn.sm { padding-top: 0 }
 .tbtn svg.i, .sbtn svg.i, .btn svg.i { margin-top: 0 }
+
+/* ---- header: search on the right with the other controls; pills share the control radius */
+.toolbar .searchbox { margin: 0 2px 0 auto; width: min(340px, 30vw) }
+.agent-pill { border-radius: var(--rad) } .chip { border-radius: var(--rad) }
+@media (max-width: 1100px) { .toolbar .searchbox { width: 220px } }
+@media (max-width: 760px) { .toolbar .searchbox { width: auto; flex: 1; margin: 0 } }
+/* ---- small dialogs (record a step) */
+.modal.dialog { width: min(480px, calc(100vw - 32px)); height: auto; grid-template-rows: 44px auto 52px }
+.modal.dialog .db { padding: 16px 18px 6px; display: flex; flex-direction: column; gap: 12px }
+.modal.dialog .help { color: var(--muted); font-size: 12.5px; line-height: 1.5 }
+.dfield { display: flex; flex-direction: column; gap: 6px } .dfield > span { font-size: 12px; color: var(--text-2); font-weight: 500 }
+.dfield .input { width: 100% } .input.area { height: auto; min-height: 64px; padding: 8px 10px; line-height: 1.45; resize: vertical; font: inherit }
+.status .it.link { cursor: pointer } .status .it.link:hover { color: var(--text) }
+
+/* timeline rail: visible in both themes (the light-theme line colour was almost white on white) */
+.tl::before { background: var(--faint); opacity: .45 }

@@ -62,7 +62,7 @@
 
   // ------------------------------------------------------------------ state
   const FIXED = [
-    { id: "system", title: "System", icon: "graph" }, { id: "overview", title: "Overview", icon: "eye" }, { id: "d:architecture", title: "Architecture", icon: "layers" },
+    { id: "overview", title: "Overview", icon: "eye" }, { id: "system", title: "System", icon: "graph" }, { id: "d:architecture", title: "Architecture", icon: "layers" },
     { id: "d:files", title: "Files", icon: "folder" }, { id: "d:classes", title: "Classes", icon: "class" },
     { id: "d:data", title: "Data", icon: "database" }, { id: "d:cloud", title: "Cloud", icon: "cloud" },
     { id: "d:processes", title: "Processes", icon: "route" }, { id: "logic", title: "Logic", icon: "function" },
@@ -73,7 +73,7 @@
   const LAYER_COLOR = { interface: "#3574f0", ui: "#2aacb8", service: "#5fb865", core: "#9b8cff", data: "#c77dbb", integration: "#e5a13e", util: "#868a91", config: "#b3ae60", test: "#6f737a" };
   const S = {
     projects: [], key: params.get("p") || store.get("key", null), st: null, model: null, modelFor: null, version: -1,
-    step: "live", base: "auto", tabs: store.get("tabs", []), active: /^(system|overview|logic|concepts|timeline|d:[a-z]+)$/.test(params.get("view") || "") ? params.get("view") : store.get("active", "system"), left: store.get("left", "project"),
+    step: "live", base: "auto", tabs: store.get("tabs", []), active: /^(system|overview|logic|concepts|timeline|d:[a-z]+)$/.test(params.get("view") || "") ? params.get("view") : store.get("active", "overview"), left: store.get("left", "project"),
     leftOpen: store.get("leftOpen", true), rightOpen: store.get("rightOpen", true), bottomOpen: store.get("bottomOpen", true), btab: store.get("btab", "steps"),
     sel: null, settings: null, integ: null, brief: null, expanded: new Set(store.get("expanded", [])), view: {}, fnFilter: "", fnSel: null, conn: "connecting",
   };
@@ -415,7 +415,8 @@
     return comps;
   }
   async function systemView(v) {
-    const sc = el("div", "scroll sys"); v.append(sc);
+    const bar = el("div", "vbar"); bar.append(el("span", "title", "System"), el("span", "note", "Click a component to see what is inside it · drag to pan · wheel to zoom · double-click to fit"), el("span", "spacer"));
+    const sc = el("div", "canvas sys"); const stage = el("div", "stage"); sc.append(stage); v.append(bar, sc);
     let comps; try { comps = await buildSystem(); } catch (e) { sc.append(el("div", "empty", "The system picture is not available for this step.")); return; }
     if (S.active !== "system") return;
     S.sysComps = Object.fromEntries(comps.map((c) => [c.id, c]));
@@ -448,9 +449,12 @@
       const t2 = mk("text", { x: 58, y: h / 2 + 15, class: "syssub" }, g); t2.textContent = (c.sub || "").length > 22 ? c.sub.slice(0, 21) + "…" : c.sub || "";
       if (c.state) { mk("circle", { cx: w - 12, cy: 12, r: 5, class: "sysdot " + c.state }, g); mk("title", {}, g).textContent = c.state === "new" ? "new since the last step" : "changed since the last step"; }
       const open = () => { select({ kind: "component", ref: c.id }); svg.querySelectorAll(".sysnode.on").forEach((n) => n.classList.remove("on")); g.classList.add("on"); };
-      g.addEventListener("click", open); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      g.addEventListener("click", open); g.addEventListener("dblclick", (e) => e.stopPropagation()); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
     }
-    sc.append(svg, el("div", "syshint", "Click a component to see what is inside it. Drawn from the code: layers, routes, tables and infrastructure."));
+    stage.append(svg);
+    const vs = S.view.sys || (S.view.sys = { x: 0, y: 0, k: 1, fitted: false });
+    const zc = zoomControls(bar, sc, vs);
+    requestAnimationFrame(() => { if (!vs.fitted) { zc.fit(W, H); vs.fitted = true; } else zc.apply(); });
   }
 
   // ---- overview
@@ -617,6 +621,7 @@
     canvas.addEventListener("pointerdown", (e) => { if (e.button !== 0 || e.target.closest("pre")) return; drag = { x: e.clientX, y: e.clientY, ox: vs.x, oy: vs.y, moved: false }; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener("pointermove", (e) => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; canvas.classList.add("drag"); } vs.x = drag.ox + dx; vs.y = drag.oy + dy; apply(); });
     canvas.addEventListener("pointerup", () => { drag = null; canvas.classList.remove("drag"); });
+    canvas.addEventListener("dblclick", (e) => { if (!e.target.closest("pre, .node, g[tabindex]")) fit(); });
     return { apply, fit };
   }
   function onNode(info) {
@@ -921,14 +926,33 @@
       if (S.brief) { const b = el("span", "it", `brief ≈ ${S.brief.tokens} tokens`); b.title = "Size of the map an agent reads instead of exploring the code"; s.append(b); }
       const st = el("span", "it", S.step === "live" ? `live · ${S.st.steps.length} steps` : `viewing step ${S.step}`); s.append(st);
     }
+    const z = store.get("uizoom", 1); if (z !== 1) { const zi = el("span", "it link", `${Math.round(z * 100)}%`); zi.title = "Interface zoom (Ctrl+= / Ctrl+-). Click to reset"; zi.onclick = () => setZoom(1); s.append(zi); }
     const c = el("span", "it"); const dot = el("span", "ldot " + (S.conn === "live" ? "on" : S.conn === "demo" ? "" : "off")); c.append(dot, document.createTextNode({ live: "connected", demo: "demo data", offline: "daemon offline", token: "unauthorised", connecting: "connecting…" }[S.conn] || S.conn)); s.append(c);
   }
 
   // ------------------------------------------------------------------ actions, menus, palette, settings, toasts
-  async function recordStep() {
-    const title = prompt("Step title (what was done). The changed files are computed by Mapwright.");
-    if (!title) return;
-    try { const r = await api(P("step"), { title }); toast("ok", "Step recorded", r.receipt); await load(false); } catch (e) { if (e.message !== "demo") toast("err", "Could not record", e.message); }
+  function recordStep() {
+    closeMenus();
+    const scrim = el("div", "scrim"), m = el("div", "modal dialog"); scrim.dataset.menu = m.dataset.menu = "1";
+    m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-label", "Record a step");
+    const head = el("div", "mh2"); head.append(el("span", null, "Record a step"), el("span", "grow")); const x = el("button", "tbtn"); x.title = "Close"; x.append(icon("close")); x.onclick = closeMenus; head.append(x);
+    const body = el("div", "db");
+    const n = S.st ? S.st.pending.length : 0;
+    body.append(el("div", "help", n ? `${n} file change${n === 1 ? "" : "s"} since the last step will go into this step. Mapwright computes what changed; you only name it.` : "No file changes since the last step: the step will be empty."));
+    const t = el("input", "input"); t.placeholder = "What was done, e.g. Add refunds endpoint"; t.maxLength = 120;
+    const why = el("textarea", "input area"); why.placeholder = "Why (optional)"; why.rows = 3; why.maxLength = 400;
+    const f1 = el("label", "dfield"); f1.append(el("span", null, "Title"), t); const f2 = el("label", "dfield"); f2.append(el("span", null, "Intent"), why); body.append(f1, f2);
+    const foot = el("div", "mf"); const msg = el("span", "msg"); const cancel = el("button", "btn", "Cancel"); const ok = el("button", "btn primary"); ok.append(icon("flag"), document.createTextNode("Record step")); ok.disabled = true;
+    foot.append(msg, cancel, ok); m.append(head, body, foot); document.body.append(scrim, m);
+    scrim.onclick = closeMenus; cancel.onclick = closeMenus; t.oninput = () => { ok.disabled = !t.value.trim(); };
+    const submit = async () => {
+      const title = t.value.trim(); if (!title) return; ok.disabled = true; msg.textContent = "Recording…";
+      try { const r = await api(P("step"), { title, intent: why.value.trim() }); closeMenus(); toast("ok", "Step recorded", r.receipt); await load(false); }
+      catch (e) { ok.disabled = false; msg.textContent = ""; if (e.message !== "demo") toast("err", "Could not record", e.message); else closeMenus(); }
+    };
+    ok.onclick = submit;
+    m.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); closeMenus(); } else if (e.key === "Enter" && (e.target === t || e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } });
+    setTimeout(() => t.focus(), 0);
   }
   function toast(kind, title, text) {
     const t = el("div", "toast " + kind); t.append(icon(kind === "ok" ? "check" : kind === "err" ? "warning" : "info")); const b = el("div"); b.append(el("b", null, title), el("span", null, text || "")); t.append(b);
@@ -940,6 +964,13 @@
     const scrim = el("div"); scrim.style.cssText = "position:fixed;inset:0;z-index:39"; scrim.onclick = closeMenus; scrim.dataset.menu = "1"; m.dataset.menu = "1";
     document.body.append(scrim, m);
   }
+  // IDE-style zoom of the whole interface: Ctrl/Cmd + = / - / 0
+  const ZOOMS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75];
+  function setZoom(z, quiet) {
+    z = Math.min(1.75, Math.max(0.67, z)); store.set("uizoom", z); $("#ide").style.zoom = z === 1 ? "" : String(z);
+    if (!quiet) toast("info", `Zoom ${Math.round(z * 100)}%`, z === 1 ? "" : "Ctrl+0 resets"); renderStatus();
+  }
+  function stepZoom(dir) { const z = store.get("uizoom", 1), i = ZOOMS.findIndex((x) => x >= z - 0.001); setZoom(dir === 0 ? 1 : ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, (i < 0 ? 4 : i) + dir))]); }
   function closeMenus() { document.querySelectorAll("[data-menu]").forEach((x) => x.remove()); }
   async function palette() {
     if (!DEMO && !S.st) return;
@@ -1012,6 +1043,7 @@
       if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "p")) { e.preventDefault(); palette(); }
       if ((e.ctrlKey || e.metaKey) && e.key === ",") { e.preventDefault(); settings(); }
       if (e.key === "Escape") closeMenus();
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && ["=", "+", "-", "_", "0"].includes(e.key)) { e.preventDefault(); stepZoom(e.key === "0" ? 0 : e.key === "-" || e.key === "_" ? -1 : 1); }
       if (e.altKey && /^[1-9]$/.test(e.key)) { const t = FIXED[+e.key - 1]; if (t) openTab(t); }
     });
     document.querySelectorAll(".resize").forEach((h) => h.addEventListener("pointerdown", (e) => {

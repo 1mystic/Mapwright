@@ -3,10 +3,10 @@ from pathlib import Path
 UI = Path(__file__).resolve().parents[1] / "src/mapwright/ui"
 
 
-def test_system_view_is_wired_as_default_tab():
+def test_system_view_is_wired_as_second_tab():
     js = (UI / "app.js").read_text()
     assert '{ id: "system", title: "System"' in js
-    assert 'store.get("active", "system")' in js
+    assert 'store.get("active", "overview")' in js  # Overview is the first tab; System second
     assert "systemView(v)" in js and 'sel.kind === "component"' in js
 
 
