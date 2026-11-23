@@ -359,7 +359,7 @@ def calls(model: dict, marks: dict, focus: str | None = None, limit: int = 40) -
         note = f"callers and callees of {fns[focus]['qual']}"
     else:
         score = {fid: len(f["callees"]) + len(f["callers"]) + (5 if fid in mk else 0) for fid, f in fns.items()
-                 if not f["module"].split(".")[0].split("/")[0] in ("tests", "test") and "test" != (f["file"].split("/")[0])}
+                 if f["module"].split(".")[0].split("/")[0] not in ("tests", "test") and "test" != (f["file"].split("/")[0])}
         keep = {fid for fid, _ in sorted(score.items(), key=lambda kv: -kv[1])[:limit] if score[fid] > 0}
         note = f"the {len(keep)} most connected functions of {len(fns)}" if len(fns) > len(keep) else ""
     by_mod: dict[str, list[str]] = {}

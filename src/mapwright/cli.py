@@ -446,6 +446,75 @@ def cmd_settings(a):
         print(f"  {k:<16} {json.dumps(v)}" + (c("  (default)", DIM) if v == config.DEFAULTS[k] else ""))
 
 
+def _inside(child, parent) -> bool:
+    try:
+        child.relative_to(parent)
+        return child != parent
+    except ValueError:
+        return False
+
+
+def cmd_forget(a):
+    import shutil
+    from pathlib import Path
+
+    from .track import project_key
+    root = os.path.realpath(A.find_root(os.path.abspath(getattr(a, "path", None) or os.getcwd())))
+    key = project_key(root)
+    local = config.local_home(root)
+    home = config.home()
+    removed = []
+    if config.unregister(key):
+        removed.append(f"stopped tracking {root}")
+    else:
+        print(c(f"{root} was not being tracked", DIM))
+    if a.purge:
+        marker = Path(root) / config.MARKER_DIR / config.MARKER
+        if local is not None:
+            target = Path(os.path.realpath(local))
+            if target == Path(root) or _inside(Path(root), target) or target == Path(os.path.realpath(Path.home())) or target.parent == target:
+                raise ValueError(f"refusing to delete {target}: it is not a dedicated Mapwright home")
+            what = f"the project-local home {target} and its marker"
+        else:
+            target = Path(os.path.realpath(home / "projects" / key))
+            if not _inside(target, Path(os.path.realpath(home))) or target.name != key:
+                raise ValueError(f"refusing to delete {target}: it is outside the Mapwright home")
+            what = f"the history {target}"
+        if target.exists() or marker.exists():
+            if not a.yes:
+                if not sys.stdin.isatty() or input(f"delete {what}? [y/N] ").strip().lower() not in ("y", "yes"):
+                    print("not deleted (pass --yes to confirm)")
+                    return
+            if target.exists():
+                shutil.rmtree(target)
+                removed.append(f"deleted {target}")
+            if local is not None and marker.exists():
+                marker.unlink()
+                removed.append(f"deleted {marker}")
+                try:
+                    marker.parent.rmdir()
+                except OSError:
+                    pass
+            config.reset_cache()
+        else:
+            print(c("no history to delete", DIM))
+    for r in removed:
+        print(f"  {c('✓', GREEN)} {r}")
+
+
+def cmd_token(a):
+    f = config.home() / "token"
+    if a.rotate:
+        tok = config.rotate_token()
+        print(f"  {c('✓', GREEN)} new token written to {f}")
+        print("  restart the daemon (mapwright down; mapwright up -d) and rerun `mapwright open` so links and agents pick it up")
+    else:
+        tok = config.token()
+        print(f"token file: {f}  (mode 0600; `mapwright token --show` prints it, `--rotate` replaces it)")
+    if a.show:
+        print(tok)
+
+
 def cmd_doctor(a):
     ok = True
     print(f"{c('◆', BLUE)} mapwright {__version__} · python {sys.version.split()[0]} · home {config.home()}")
@@ -577,6 +646,12 @@ def main(argv=None) -> int:
     x = add("settings", cmd_settings, "Show or change a setting: settings KEY VALUE.", path=False)
     x.add_argument("key", nargs="?")
     x.add_argument("value", nargs="?")
+    x = add("forget", cmd_forget, "Stop tracking this project; --purge also deletes its history.")
+    x.add_argument("--purge", action="store_true", help="delete the project's history (inside the Mapwright home only)")
+    x.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    x = add("token", cmd_token, "Show where the local token lives; --rotate replaces it.", path=False)
+    x.add_argument("--rotate", action="store_true", help="write a new token (restart the daemon afterwards)")
+    x.add_argument("--show", action="store_true", help="print the token itself")
     add("doctor", cmd_doctor, "Check the setup.")
     add("guide", lambda a: print(GUIDE), "Quick guide.", path=False)
     a = ap.parse_args(argv)

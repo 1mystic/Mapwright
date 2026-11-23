@@ -48,3 +48,22 @@ include = ["src", "tests", "scripts", "integrations", "README.md", "LICENSE", "C
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+  "E701", "E702", "E731", "E741",   # compact one-line style
+  "B905",                           # zip() without strict=
+  "E501",                           # long lines are tolerated; the 160 limit is a guide for formatters
+  "B007", "B023",                   # loop variables in comprehensions/lambdas are used immediately
+  "UP031",                          # '%d' formatting inside f-string arguments
+  "UP037",                          # quoted annotations are kept where `from __future__` is absent
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/mapwright/analyze.py" = ["I001"]
+"tests/*" = ["E501", "B011"]

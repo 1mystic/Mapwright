@@ -42,6 +42,7 @@ def main() -> None:
     os.environ["MAPWRIGHT_HOME"] = home
     os.environ["MAPWRIGHT_PORT"] = str(free_port())
     import demo_session
+
     from mapwright import config
     from mapwright.server import Daemon
     from mapwright.track import by_key
