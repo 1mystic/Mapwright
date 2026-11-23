@@ -216,6 +216,38 @@ class Project:
                 self._snapshot("baseline (before tracking started)", "", "baseline")
             return changed
 
+    def live_check(self) -> list[str]:
+        """Live feedback: refresh incrementally and return rule/cycle violation texts that this change introduced
+        (not present before it, not already shown in this project). The before-state is the stored set from the
+        last check, or, on the first run, what the cached model says. Empty without rules."""
+        from . import rules as R
+        rules, err = R.load(self.root)
+        if not rules:
+            return []
+        with self.locked():
+            path = self.dir / "live.json"
+            state = config.read_json(path, None)
+            before = None
+            if isinstance(state, dict) and isinstance(state.get("known"), list):
+                before = set(state["known"])
+            elif self.cache:
+                if self.model is None:
+                    self._build()
+                before = {v["text"] for v in R.check(self.model, rules)}
+            self.refresh()
+            after = [v["text"] for v in R.check(self.model, rules)] if self.model else []
+            shown = list((state or {}).get("shown") or []) if isinstance(state, dict) else []
+            new = [t for t in dict.fromkeys(after) if before is not None and t not in before and t not in shown][:3]
+            config.write_json(path, {"known": after[:200], "shown": (shown + new)[-500:]})
+            return new
+
+    def open_violations(self) -> list[str]:
+        from . import rules as R
+        rules, err = R.load(self.root)
+        if not rules or not self.model:
+            return []
+        return [v["text"] for v in R.check(self.model, rules)]
+
     def _analyze(self, rel: str, sig) -> dict:
         if A._secretish(rel):
             return {"stat": list(sig), "sha": f"secret:{sig[0]}:{sig[1]}", "part": None, "concepts": {}, "secret": True}
@@ -426,7 +458,7 @@ class Project:
                 return e["text"]
         return mine[0]["text"] if mine else ""
 
-    def maybe_auto_step(self, session: str | None = None, final: bool = False) -> dict | None:
+    def maybe_auto_step(self, session: str | None = None, final: bool = False, note: str = "") -> dict | None:
         """Close a step by itself when the settings say so and something meaningful changed.
 
         Never creates an empty step, nor one for noise-only changes (lockfiles, build output, ...). In
@@ -471,7 +503,7 @@ class Project:
                 marks = A.diff_models(prev["model"] if prev else None, self.model)
                 new_syms = [k.split(":")[-1].split(".")[-1] for kind in ("functions", "classes") for k, v in (marks.get(kind) or {}).items() if v == "new"][:3]
             title = titles.derive_title(prompt, real, new_syms)
-            return self._snapshot(title, prompt[:300], "auto", prompt=prompt)
+            return self._snapshot(title, (prompt[:300] + (" | " + note if note else "")), "auto", prompt=prompt)
 
     # ------------------------------------------------------------------ annotations
     def annotations(self) -> dict:

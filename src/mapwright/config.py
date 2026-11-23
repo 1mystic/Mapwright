@@ -21,6 +21,7 @@ DEFAULTS = {
     "web_origins": ["https://mapwright.pages.dev"],  # hosted sites allowed to call this daemon from the browser (exact origins; the token is still required)
     "respect_gitignore": True,    # also skip what .gitignore / .git/info/exclude ignore
     "redact": True,
+    "live_feedback": True,        # after an edit, the Claude Code hook tells the agent about NEW rule violations or import cycles
     "keep_blobs_days": 0,         # 0 = keep every file version
 }
 
