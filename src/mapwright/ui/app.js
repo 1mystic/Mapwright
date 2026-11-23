@@ -1077,9 +1077,10 @@
   }
   function menu(anchor, items) {
     closeMenus(); const m = el("div", "menu"); const r = anchor.getBoundingClientRect(); m.style.left = r.left + "px"; m.style.top = r.bottom + 4 + "px";
-    for (const it of items) { if (it === "-") { m.append(el("hr")); continue; } if (it.header) { m.append(el("div", "mh", it.header)); continue; } const mi = el("div", "mi"); if (it.icon) mi.append(icon(it.icon)); mi.append(el("span", null, it.label)); if (it.meta) mi.append(el("span", "meta", it.meta)); mi.onclick = () => { closeMenus(); it.run(); }; m.append(mi); }
+    for (const it of items) { if (it === "-") { m.append(el("hr")); continue; } if (it.header) { m.append(el("div", "mh", it.header)); continue; } const mi = el("div", "mi"); if (it.icon) mi.append(icon(it.icon)); if (it.num != null) mi.append(el("span", "num", it.num)); const lb = el("span", "lbl", it.label); lb.title = it.label; mi.append(lb); if (it.meta) mi.append(el("span", "meta", it.meta)); mi.onclick = () => { closeMenus(); it.run(); }; m.append(mi); }
     const scrim = el("div"); scrim.style.cssText = "position:fixed;inset:0;z-index:39"; scrim.onclick = closeMenus; scrim.dataset.menu = "1"; m.dataset.menu = "1";
     document.body.append(scrim, m);
+    const over = m.getBoundingClientRect().right - (innerWidth - 8); if (over > 0) m.style.left = Math.max(8, r.left - over) + "px";
   }
   // IDE-style zoom of the whole interface: Ctrl/Cmd + = / - / 0
   const ZOOMS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75];
@@ -1153,7 +1154,7 @@
     $("#w-agents").onclick = () => openTab({ id: "setup", title: "Connect an agent", icon: "plug" });
     $("#right-close").onclick = () => { S.rightOpen = false; saveUI(); renderAll(); };
     $("#w-project").onclick = (e) => menu(e.currentTarget, [{ header: "Tracked projects" }, ...S.projects.map((p) => ({ label: p.name, meta: p.root, icon: p.key === S.key ? "check" : "folder", run: () => { S.key = p.key; S.step = "live"; S.tabs = []; S.active = "overview"; S.sel = null; S.view = {}; saveUI(); load(true); } })), "-", { label: "Track another folder…", icon: "plus", run: () => openTab({ id: "setup", title: "Connect an agent", icon: "plug" }) }]);
-    $("#w-step").onclick = (e) => { if (!S.st) return; menu(e.currentTarget, [{ label: "Live (latest)", meta: `${S.st.pending.length} pending`, icon: S.step === "live" ? "check" : "history", run: () => setStep("live") }, "-", ...[...S.st.steps].reverse().slice(0, 30).map((s) => ({ label: `#${s.n} ${s.title.slice(0, 48)}`, meta: ago(s.ts), icon: S.step === s.n ? "check" : "flag", run: () => setStep(s.n) }))]); };
+    $("#w-step").onclick = (e) => { if (!S.st) return; menu(e.currentTarget, [{ num: "", label: "Live (latest)", meta: `${S.st.pending.length} pending`, icon: S.step === "live" ? "check" : "history", run: () => setStep("live") }, "-", ...[...S.st.steps].reverse().slice(0, 30).map((s) => ({ num: `#${s.n}`, label: s.title, meta: ago(s.ts), icon: S.step === s.n ? "check" : "flag", run: () => setStep(s.n) }))]); };
     let lastShift = 0;
     document.addEventListener("keydown", (e) => {
       if (e.key === "Shift" && !e.repeat) { const now = Date.now(); if (now - lastShift < 350) palette(); lastShift = now; }

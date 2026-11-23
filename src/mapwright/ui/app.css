@@ -325,3 +325,11 @@ kbd { font: 11px/1 "JetBrains Mono", ui-monospace, monospace; padding: 2px 5px; 
 
 /* panels never grow the layout: their bodies scroll (a long file tree used to push the bottom panel and status bar off-screen) */
 .left, .right, .stripe { min-height: 0; overflow: hidden }
+
+/* ---- menus: titles truncate, a muted number column, right-aligned times; never a horizontal scrollbar */
+.menu { width: max-content; max-width: min(460px, calc(100vw - 16px)); overflow-x: hidden }
+.menu .mi { min-width: 0 } .menu .mi > svg.i { flex: none }
+.menu .mi .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis }
+.menu .mi .num { flex: none; min-width: 26px; color: var(--muted); font: 500 12px "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums }
+.menu .mi .meta { flex: none; font-variant-numeric: tabular-nums; text-align: right; min-width: 56px }
+.menu .mi:hover .num, .menu .mi.act .num { color: rgba(255,255,255,.8) }

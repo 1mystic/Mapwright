@@ -26,9 +26,26 @@ _LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 _SPLIT = re.compile(r"(?<=[.!?])\s+|\n+|;\s+")
 
 
+# Text an agent harness injects into the prompt stream: never the user's own words.
+_INJECTED = ("pasted_content", "agent-message", "task-notification", "system-reminder", "ide_opened_file", "ide_selection",
+             "local-command-stdout", "local-command-caveat", "command-name", "command-message", "command-args", "tool-use-id",
+             "bash-input", "bash-stdout", "bash-stderr", "user-memory-input", "cross-session-message")
+_INJECTED_BLOCK = re.compile(r"<(%s)\b[^>]*>.*?(?:</\1\s*>|\Z)" % "|".join(map(re.escape, _INJECTED)), re.S | re.I)
+# Whole messages that are not from the user at all (as opposed to blocks that accompany the user's words).
+_NOT_USER = ("agent-message", "task-notification", "cross-session-message", "local-command-stdout", "local-command-caveat",
+             "command-name", "command-message", "bash-input", "bash-stdout", "bash-stderr")
+_MACHINE_START = re.compile(r"^\s*(?:\[SYSTEM NOTIFICATION|Another Claude session sent a message|<(?:%s)\b)" % "|".join(map(re.escape, _NOT_USER)), re.I)
+_TAG = re.compile(r"</?[A-Za-z][\w:-]*(?:\s[^<>]*)?/?>")
+
+
+def human_text(text: str) -> str:
+    """The user's own words: injected harness blocks (pasted content, agent messages, notifications, reminders) removed."""
+    return " ".join(_TAG.sub(" ", _INJECTED_BLOCK.sub(" ", text or "")).split())
+
+
 def clean_prompt(text: str) -> str:
     """Prompt text with fences, urls, paths, markdown and links removed, whitespace collapsed."""
-    t = _FENCE.sub(" ", text or "")
+    t = _FENCE.sub(" ", human_text(text))
     t = _LINK.sub(r"\1", t)
     t = re.sub(r"⟨[^⟩]*⟩", " ", t)  # redaction placeholders
     t = _URL.sub(" ", t)
@@ -58,7 +75,9 @@ def cap(text: str, limit: int = MAX_TITLE) -> str:
 
 def prompt_title(prompt: str) -> str | None:
     """A title from the prompt, or None when it is trivial, long/pasted text or too ambiguous to trust."""
-    raw = prompt or ""
+    if _MACHINE_START.match(prompt or ""):
+        return None  # a subagent report or notification, not something the user asked
+    raw = human_text(prompt)
     if len(raw.split()) > 60 or raw.count("\n") > 6 or raw.count("```") >= 2:
         return None  # a long prompt or pasted text: describe the changes instead
     sentence = _first_sentence(clean_prompt(raw))

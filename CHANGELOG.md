@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
+- Fix: auto-step titles never come from text an agent harness injects (subagent reports, notifications, pasted blocks, IDE context); only the user's own words, or a title computed from the changes.
+- Fix: the step menu in the header truncates long titles, aligns numbers and times, and never scrolls sideways or leaves the window.
 - Fix: expanding a long file tree no longer pushes the bottom panel and status bar out of the window; the layout also fits the window at every interface zoom level.
 
 ## 0.3.0

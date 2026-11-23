@@ -41,3 +41,13 @@ def test_noise_classifier():
     assert noise.classify("gen/out.txt", None, lambda p: p.startswith("gen/")) == "ignored"
     real, noisy = noise.split([{"path": "a.py", "kind": "added"}, {"path": "yarn.lock", "kind": "modified"}])
     assert [c["path"] for c in real] == ["a.py"] and noisy[0]["noise"] == "lockfile"
+
+
+def test_injected_harness_text_never_becomes_a_title():
+    from mapwright.titles import prompt_title
+    assert prompt_title('<agent-message from="a6b79">[Subagent hand-back] Both features are built</agent-message>') is None
+    assert prompt_title("[SYSTEM NOTIFICATION - NOT USER INPUT] task finished") is None
+    assert prompt_title('<pasted_content id="9df6">the link carries your local token\nerror: Broken pipe</pasted_content>') is None
+    t = prompt_title('<pasted_content id="1">some log\nlines</pasted_content> fix the dropdown alignment in the header')
+    assert t and "pasted" not in t.lower() and "dropdown" in t.lower()
+    assert prompt_title('<ide_opened_file>The user opened web/index.html</ide_opened_file> add a theme toggle') .lower().startswith("add a theme toggle")
