@@ -108,6 +108,7 @@ hook never blocks and stays silent when nothing is new. Turn it off with `mapwri
 |---|---|
 | `mapwright diagram architecture\|files\|classes\|data\|cloud\|processes\|calls\|concepts [--step N] [--focus X]` | Print a diagram as Mermaid |
 | `mapwright flow FUNCTION` | Flowchart of one function |
+| `mapwright report [--since STEP\|REF] [--until STEP] [--format md\|json] [-o FILE]` | Reviewer-ready summary of how the architecture changed: count deltas, modules by layer, a Mermaid diagram of changed modules, routes, tables, mechanisms, packages, worsened hotspots, rule status (new and fixed), verification. `--since` is a step or a git ref read straight from git without touching the working tree (default `origin/main`, then `main`, then the last step). `.github/workflows/pr-report.yml` posts it on a PR (manual) |
 | `mapwright export -o DIR` | `MAP.md` (renders on GitHub) + every diagram + steps and verification as JSON |
 
 ## Settings

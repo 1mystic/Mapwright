@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `mapwright report`: reviewer-ready Markdown or JSON summary of architecture changes since a step or git ref (counts, modules by layer, Mermaid diagram of changed modules, routes, tables, hotspots, rule status, verification), plus a manual PR-comment workflow.
 - Live feedback: right after an edit, the Claude Code hook tells the agent about rule violations and import cycles that edit introduced, so it can fix them in the same turn (setting `live_feedback`, default on; about 10 ms warm).
 - Landing page: one spacing scale for every section, a 5x2 views grid, consistent section layouts, cleaner copy.
 - Website: light theme with a toggle in the nav on every page (first visit follows the system preference, no flash on load); inline code in docs no longer breaks mid-token.
