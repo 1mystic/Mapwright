@@ -9,7 +9,9 @@ shown as unverified instead of being taken at its word.
 
 from __future__ import annotations
 
+import io
 import re
+import tokenize
 
 # id: (title, icon, group, meaning, import prefixes, code patterns)
 CATALOG: dict[str, tuple[str, str, str, str, tuple[str, ...], tuple[str, ...]]] = {
@@ -24,7 +26,7 @@ CATALOG: dict[str, tuple[str, str, str, str, tuple[str, ...], tuple[str, ...]]] 
             ("argparse", "click", "typer", "commander", "yargs", "fire", "docopt"), (r"add_subparsers\(", r"@click\.command", r"\.command\(\s*['\"]")),
     "auth": ("Authentication", "key", "security", "Checks who is calling.",
              ("jwt", "jose", "authlib", "passport", "next-auth", "flask_login", "django.contrib.auth", "oauthlib", "fastapi.security", "jsonwebtoken"),
-             (r"\b(login|logout|authenticate|verify_token|get_current_user|require_auth|is_authenticated)\b", r"Authorization['\"]?\s*[:\]]", r"\bBearer\b")),
+             (r"\b(login|logout|authenticate|verify_token|get_current_user|require_auth|is_authenticated)\b", r"['\"]Authorization['\"]\s*[:\]]", r"['\"]Bearer\b")),
     "password-hashing": ("Password hashing", "lock", "security", "Stores passwords as slow salted hashes.",
                          ("bcrypt", "argon2", "passlib", "scrypt"), (r"\bpbkdf2_hmac\(", r"\b(hash_password|check_password|verify_password)\b", r"bcrypt\.(hash|compare|gensalt)")),
     "encryption": ("Encryption", "shield", "security", "Encrypts data with a key.",
@@ -116,6 +118,95 @@ GROUPS = {"interface": "Interface", "security": "Security", "performance": "Perf
 _RX = {cid: [re.compile(p, re.M) for p in spec[5]] for cid, spec in CATALOG.items()}
 
 
+def _py_string_spans(text: str) -> list[tuple[int, int]]:
+    """Character ranges of Python string literal contents (quotes excluded) and comments."""
+    starts, pos = [0], 0
+    for ln in text.splitlines(keepends=True):
+        pos += len(ln)
+        starts.append(pos)
+    spans = []
+    fmid = getattr(tokenize, "FSTRING_MIDDLE", None)
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.STRING:
+                a, b = starts[tok.start[0] - 1] + tok.start[1], starts[tok.end[0] - 1] + tok.end[1]
+                body = tok.string.lstrip("rRbBuUfF")
+                q = 3 if body[:3] in ('"""', "'''") else 1
+                spans.append((a + len(tok.string) - len(body) + q, b - q))
+            elif tok.type == tokenize.COMMENT:
+                spans.append((starts[tok.start[0] - 1] + tok.start[1], starts[tok.end[0] - 1] + tok.end[1]))
+            elif fmid is not None and tok.type == fmid:
+                spans.append((starts[tok.start[0] - 1] + tok.start[1], starts[tok.end[0] - 1] + tok.end[1]))
+    except (tokenize.TokenError, IndentationError, SyntaxError, IndexError):
+        pass
+    return spans
+
+
+_RX_PREV = set("(,=:[!&|?{};+-*%<>~^") | {""}
+
+
+def _js_string_spans(text: str) -> list[tuple[int, int]]:
+    """Contents of quoted strings, template literals and regex literals in JS/TS."""
+    spans, i, n, prev = [], 0, len(text), ""
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            j = n if j < 0 else j
+            spans.append((i, j))
+            i = j
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            spans.append((i, j))
+            i = j
+        elif c in "\"'`":
+            j = i + 1
+            while j < n and text[j] != c and not (c != "`" and text[j] == "\n"):
+                j += 2 if text[j] == "\\" else 1
+            spans.append((i + 1, min(j, n)))
+            i, prev = j + 1, c
+        elif c == "/" and (prev in _RX_PREV or text[max(0, i - 7):i].strip().endswith("return")):
+            j, cls = i + 1, False
+            while j < n and text[j] != "\n" and (cls or text[j] != "/"):
+                cls = (text[j] == "[") or (cls and text[j] != "]")
+                j += 2 if text[j] == "\\" else 1
+            if j < n and text[j] == "/":
+                spans.append((i + 1, j))
+                i, prev = j + 1, "/"
+            else:
+                i += 1
+        else:
+            if not c.isspace():
+                prev = c
+            i += 1
+    return spans
+
+
+def _in_spans(pos: int, spans: list[tuple[int, int]], starts: list[int]) -> bool:
+    import bisect
+    k = bisect.bisect_right(starts, pos) - 1
+    return k >= 0 and spans[k][0] <= pos < spans[k][1]
+
+
+def string_spans(rel: str, text: str) -> list[tuple[int, int]]:
+    low = rel.lower()
+    if low.endswith(".py"):
+        return sorted(_py_string_spans(text))
+    if low.endswith((".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx")):
+        return sorted(_js_string_spans(text))
+    return []
+
+
+def _search(rx: re.Pattern, text: str, spans: list[tuple[int, int]], starts: list[int]):
+    """First match of `rx` that does not begin inside a string literal. A pattern table that merely
+    lists a signal as text is not evidence the code does it."""
+    for m in rx.finditer(text):
+        if not spans or not _in_spans(m.start(), spans, starts):
+            return m
+    return None
+
+
 def catalog() -> list[dict]:
     return [{"id": cid, "title": t, "icon": icon, "group": g, "meaning": m} for cid, (t, icon, g, m, _, _) in CATALOG.items()]
 
@@ -133,6 +224,8 @@ def detect_file(rel: str, text: str, part: dict | None) -> dict[str, list[dict]]
     raw = (part or {}).get("raw_imports", [])
     funcs = (part or {}).get("functions", [])
     out: dict[str, list[dict]] = {}
+    spans = string_spans(rel, text)
+    sstarts = [a for a, _ in spans]
 
     def symbol_at(line: int) -> str | None:
         best = None
@@ -149,7 +242,7 @@ def detect_file(rel: str, text: str, part: dict | None) -> dict[str, list[dict]]
                          and ("import" in ln or "require" in ln)), 1)
             ev.append({"line": line, "signal": f"imports {imp}", "symbol": None})
         for rx in _RX[cid]:
-            m = rx.search(text)
+            m = _search(rx, text, spans, sstarts)
             if m:
                 line = text.count("\n", 0, m.start()) + 1
                 ev.append({"line": line, "signal": "code: " + m.group(0).strip()[:48], "symbol": symbol_at(line)})
